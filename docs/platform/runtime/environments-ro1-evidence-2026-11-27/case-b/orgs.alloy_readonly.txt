@@ -1,1 +1,2 @@
-psql:<stdin>:1: ERROR:  query would be affected by row-level security policy for table "orgs"
+55ba862c-2ef0-45f2-9b7d-f7c52e418e15|retired|_w17_selftest_55ba862c
+93667019-bd28-49b5-a688-acc9bb1e0a19|active|Firefly (RO1 local row)

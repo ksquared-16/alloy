@@ -1,2 +1,2 @@
+55ba862c-2ef0-45f2-9b7d-f7c52e418e15|retired|_w17_selftest_55ba862c
 93667019-bd28-49b5-a688-acc9bb1e0a19|active|Firefly (RO1 local row)
-c3ff3f4a-083b-408e-91d4-c89b536daa55|retired|_w17_selftest_c3ff3f4a

@@ -1,9 +1,8 @@
 -- Alloy read-only role `alloy_readonly` (ALY-14, objective WALDEN_ENVIRONMENTS_AND_PROMOTION_B9E42B66, slice RO1).
 --
 -- WHAT IT IS FOR
---   The release tool's catalog and ledger reads (`emit-sql ledger`, `ledger-if-present`, `fingerprint`) connect as
---   this role. It reads no tenant's rows: the reads that need them (`census` row counts, `orgs`, the step-6 export)
---   are refused, loudly (3), and how they run is the owner's decision (plan, step 5).
+--   The release tool's read paths (`emit-sql ledger`, `ledger-if-present`, `fingerprint`, `census`, `orgs`) and the
+--   step-6 export connect as this role:
 --     PRODUCTION_DB_URL_READONLY  the new project tjziptdknxdajzauctha
 --     STAGING_DB_URL_READONLY     staging ikaxilmwmrmbagoidedu
 --   One script for both projects. The owner pastes it into each project's SQL Editor and runs it. Running it again is
@@ -11,33 +10,40 @@
 --   Plan: docs/platform/runtime/environments-final-cutover-plan-2026-11-26.md, step 5.
 --   Evidence: docs/platform/runtime/environments-ro1-evidence-2026-11-27/.
 --
+-- OWNER EXCEPTION (2026-11-26, plan O-READONLY)
+--   The role has BYPASSRLS: it reads EVERY tenant's rows, the same as `postgres` does. The owner accepted this
+--   explicitly on 2026-11-26, after the Database Engineer's review, so that the census, the orgs list and the step-6
+--   export run through this dedicated login. It never writes (below). Its password lives only in the owner's secret
+--   store. FOLLOW-UP: on production, switch the role off (NOLOGIN) or narrow it (NOBYPASSRLS) before the first tenant
+--   with live customer data (families, attendance or billing) goes live.
+--
 -- WHAT IT DOES
 --   1. Creates the LOGIN role `alloy_readonly` with NO password. The owner sets the password afterwards, outside the
 --      SQL Editor (owner dashboard guide, step 5). Until then the role cannot sign in.
 --   2. Sets the role's sessions to read-only (default_transaction_read_only = on), a 120 s statement_timeout, a 5 s
 --      lock_timeout, a 60 s idle_in_transaction_session_timeout and row_security = off (3), and allows at most 5
 --      connections.
---   3. Gives it NOBYPASSRLS and sets its sessions' row_security = off. Every public table has RLS on, and no policy
---      names this role, so it can read no tenant's rows. With row_security off, a read that would reach rows behind RLS
---      stops with `ERROR: query would be affected by row-level security policy for table …` instead of quietly reading
---      0 rows. What it reads in full: the ledger and the fingerprint (the catalog). What it cannot read: the census's
---      row counts, the orgs list and the step-6 export, which all read tenant rows (evidence README, section 1).
+--   3. Gives it BYPASSRLS (the owner exception above), so that the census counts, the fingerprint, the orgs list and
+--      the export see every row, the same as `postgres` does. Every public table has RLS on, and no policy names this
+--      role. Its sessions also have row_security = off: if BYPASSRLS were ever missing, a read that reaches rows behind
+--      RLS stops with `ERROR: query would be affected by row-level security policy for table …` instead of quietly
+--      reading 0 rows and an empty export (evidence README, section 1).
 --   4. Grants USAGE and SELECT, and nothing else, on:
---        public                   every table and view: the fingerprint's information_schema.columns lists only
---                                 tables the caller holds a privilege on. RLS still hides every row (3)
+--        public                   every table and view (ledger-free queries, census, orgs, export, fingerprint)
 --        supabase_migrations      the ledger (ledger, ledger-if-present); the schema is created here, empty, if the
 --                                 project has none yet, so its default privileges can be set before step 9
---        storage.buckets          the census's `bucket:org_documents` row (RLS hides its rows too, as in 3)
+--        storage.buckets          the census's `bucket:org_documents` row
 --   5. Sets ALTER DEFAULT PRIVILEGES FOR ROLE postgres in public and supabase_migrations, so every table the 558
---      migrations create as `postgres` at step 9 (and the ledger table) is visible to this role's catalog and ledger
---      reads after step 9, with no second run of this script.
+--      migrations create as `postgres` at step 9 (and the ledger table) is readable by this role at steps 15b and 16.6
+--      with no second run of this script.
 --   6. Ends with a check table: one row per check. Rows 1-9 must say `ok`; row 10 is a note (see below).
 --
 -- WHAT IT NEVER ALLOWS
 --   - INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER or MAINTAIN on any table: never granted, and revoked again
 --     here in case anything granted them. This is a privilege refusal: it holds even if the session turns read-only off.
 --   - USAGE or SELECT on sequences (nextval would write).
---   - Any tenant's rows: no BYPASSRLS, and no policy names the role (re-asserted here: NOBYPASSRLS on every run).
+--   - Writing any tenant's row: BYPASSRLS only lets it read past row-level security; the privilege refusals above
+--     still stop every write.
 --   - CREATE on any schema or the database; owning anything; SUPERUSER, CREATEDB, CREATEROLE, REPLICATION; inheriting
 --     another role's privileges (NOINHERIT, and it is a member of no role).
 --   - EXECUTE: nothing is granted. Every writing SECURITY DEFINER function in public is closed to PUBLIC by the
@@ -60,13 +66,13 @@ $$;
 
 -- The attributes, re-asserted on every run. No PASSWORD clause, so a re-run keeps the owner's password. NOSUPERUSER is
 -- left out because only a superuser may name it; a new role is never a superuser, and check 1 below confirms it.
--- NOBYPASSRLS is named so that a re-run takes away a BYPASSRLS given earlier.
-alter role alloy_readonly with login nocreatedb nocreaterole noinherit noreplication nobypassrls connection limit 5;
+-- BYPASSRLS is the owner exception (2026-11-26) in the header: switched off on production before live customer data.
+alter role alloy_readonly with login nocreatedb nocreaterole noinherit noreplication bypassrls connection limit 5;
 alter role alloy_readonly set default_transaction_read_only = on;
 alter role alloy_readonly set statement_timeout = '120s';
 alter role alloy_readonly set lock_timeout = '5s';
 alter role alloy_readonly set idle_in_transaction_session_timeout = '60s';
-alter role alloy_readonly set row_security = off;  -- a read of tenant rows errors; it never reads 0 rows quietly
+alter role alloy_readonly set row_security = off;  -- without BYPASSRLS a read of tenant rows errors; never 0 rows quietly
 
 -- public: read every table and view, now and as the migrations create them.
 grant usage on schema public to alloy_readonly;
@@ -105,7 +111,7 @@ commit;
 select c.check_name, c.result from (
   select 1 as n, 'role attributes' as check_name,
          case when r.rolcanlogin and not r.rolsuper and not r.rolcreatedb and not r.rolcreaterole and not r.rolinherit
-                   and not r.rolreplication and not r.rolbypassrls and r.rolconnlimit = 5
+                   and not r.rolreplication and r.rolbypassrls and r.rolconnlimit = 5
               then 'ok' else 'WRONG: ' || row(r.rolcanlogin, r.rolsuper, r.rolcreatedb, r.rolcreaterole, r.rolinherit,
                                               r.rolreplication, r.rolbypassrls, r.rolconnlimit)::text end as result
     from pg_roles r where r.rolname = 'alloy_readonly'

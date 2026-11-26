@@ -3,7 +3,7 @@ owner: runtime
 status: proposed
 last_reviewed: 2026-11-26
 supersedes: []
-status_note: Owner's step-by-step guide to every Vercel, Render and Supabase dashboard action in the first promotion (objective WALDEN_ENVIRONMENTS_AND_PROMOTION_B9E42B66), in the order of the final cutover plan. Written for the owner's 2026-11-26 decision (D12) that the owner does every dashboard step personally. Placeholders only; no value appears here. Revised 2026-11-27 (slice RO1): step 5's project is created (ref tjziptdknxdajzauctha, us-west-2, SMTP through Resend), backups are daily for 7 days with no PITR (O-BACKUPS), and the read-only role has click-by-click steps for the new project and staging. Revised again (Database Engineer review of RO1): the role has no BYPASSRLS and reads no tenant's rows; step 5 checks that too. Nothing here authorizes a live action.
+status_note: Owner's step-by-step guide to every Vercel, Render and Supabase dashboard action in the first promotion (objective WALDEN_ENVIRONMENTS_AND_PROMOTION_B9E42B66), in the order of the final cutover plan. Written for the owner's 2026-11-26 decision (D12) that the owner does every dashboard step personally. Placeholders only; no value appears here. Revised 2026-11-27 (slice RO1): step 5's project is created (ref tjziptdknxdajzauctha, us-west-2, SMTP through Resend), backups are daily for 7 days with no PITR (O-BACKUPS), and the read-only role has click-by-click steps for the new project and staging. Revised again (Database Engineer review of RO1): the role has no BYPASSRLS and reads no tenant's rows; step 5 checks that too. Revised 2026-11-26 (owner exception O-READONLY): the role keeps BYPASSRLS and reads every tenant's rows, never writes, and is switched off on production before the first tenant with live customer data; step 5 records it and its known limit. Nothing here authorizes a live action.
 ---
 
 # Environments and promotion — owner dashboard guide (2026-11-26)
@@ -101,11 +101,20 @@ steps are the same. The old project `vslwnntzzgpnmrpjipat` is never one of them.
 
 The statement is the file
 [`environments-readonly-role-2026-11-27.sql`](environments-readonly-role-2026-11-27.sql). It creates a role named
-`alloy_readonly` that can read but never write, and it holds **no password or other secret**. It reads the migration
-ledger and the database's structure, and **no tenant's rows**: it does not bypass row-level security (no BYPASSRLS), so
-the census counts, the orgs list and the step-6 export cannot run as this role. They stop with an error rather than read
-nothing. How those reads run is your decision, recorded in the plan's step 5, before step 6. The Developer gives you
+`alloy_readonly` that can read but never write, and it holds **no password or other secret**. The Developer gives you
 the file. Running it again is safe: it changes nothing that is already right, and it never touches the password.
+
+**Your exception (2026-11-26, plan O-READONLY).** You accepted that this login bypasses row-level security
+(BYPASSRLS): it **reads every tenant's rows**, so the census counts, the orgs list and the step-6 export run through it.
+It **can never write**. Its password stays **only in your secret store**. **Follow-up:** on production, switch it off or
+narrow it **before the first tenant with live customer data (families, attendance or billing) goes live**; the
+Developer gives you the statement then.
+
+**Known limit (a separate open decision; the recommendation is to accept it as is).** If a session deliberately switches
+read-only off, the role can still use what Supabase allows every role: large objects, temporary tables and pg_net's
+request queue (which can send a web request). It cannot touch Alloy's tables, the migration ledger or Storage
+([RO1 evidence](environments-ro1-evidence-2026-11-27/README.md), section 3). This is one more reason the URL stays only
+in your secret store.
 
 **1. Run the file.**
 
@@ -148,7 +157,7 @@ you type, so a password typed there would stay in your saved queries.
 - **If it doesn't work:** do not use port `6543` (the *transaction* pooler: the release tool refuses it). Do not use the
   *Direct connection* `db.<ref>.supabase.co`: it works only over IPv6 unless the IPv4 add-on is bought.
 
-**4. Check that a write and a tenant read are refused.** You type no command. In your operator session, the Developer starts a hidden
+**4. Check that a write is refused and a read works.** You type no command. In your operator session, the Developer starts a hidden
 prompt, `read -rs PRODUCTION_DB_URL_READONLY`, and you paste the URL there (for staging, `STAGING_DB_URL_READONLY`). The
 Developer then shows you these three commands, and runs them when you say yes:
 
@@ -161,12 +170,14 @@ psql "$PRODUCTION_DB_URL_READONLY" -X -At -c "select count(*) from public.orgs"
 - **Check:** the first command prints `alloy_readonly read_only=on`, then
   `ERROR:  cannot execute CREATE TABLE in a read-only transaction`. The second prints
   `ERROR:  permission denied for schema supabase_migrations`: even with read-only switched off, the role is not allowed
-  to write. Both fail, and nothing is created. The third prints
-  `ERROR:  query would be affected by row-level security policy for table "orgs"`: the role cannot read a tenant's
-  rows. This was rehearsed locally
+  to write. Both fail, and nothing is created. The third prints a number (on the new project before step 9 it is an
+  error, `relation "public.orgs" does not exist`, which is right: step 9 creates the table): the role reads every
+  tenant's rows, as you accepted. This was rehearsed locally
   ([RO1 evidence](environments-ro1-evidence-2026-11-27/README.md)).
 - **If it doesn't work:** if either of the first two commands prints `CREATE TABLE` (with no error), stop and tell the
-  Developer at once: the role can write. If the third prints a number, stop too: the role can read tenants' rows. If
+  Developer at once: the role can write. If the third prints
+  `ERROR:  query would be affected by row-level security policy`, the role lacks BYPASSRLS: run the file again (1) and
+  check row 1. If
   a command says `password authentication failed`, the URL is wrong; check it against step 3. Right after a password
   reset, the pooler can refuse for about 15 seconds, so wait and try once more.
 

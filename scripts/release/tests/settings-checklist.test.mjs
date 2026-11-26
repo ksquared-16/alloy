@@ -127,6 +127,14 @@ test("the final cutover plan: no credential, the owner's window, every step and 
     // O-BACKUPS (owner, 2026-11-26, replacing O-PITR) and O-ADMIN are decided, not open: daily backups kept 7 days, no
     // PITR until the first tenant with live customer data; a restore can lose up to a day.
     assert.match(text, /^\| \*\*O-BACKUPS\*\* \|[^\n]*daily backups, kept 7 days[^\n]*No point-in-time recovery[^\n]*can lose up to a day[^\n]*before the first tenant with live customer data/m, "O-BACKUPS: daily, 7 days, no PITR, the follow-up");
+    // O-READONLY (owner, 2026-11-26): alloy_readonly keeps BYPASSRLS by explicit exception, never writes, and is switched
+    // off or narrowed on production before the first tenant with live customer data. The step-5 decision is closed.
+    assert.match(text, /^\| \*\*O-READONLY\*\* \|[^\n]*BYPASSRLS[^\n]*every tenant's rows[^\n]*never allows:\*\* a write[^\n]*owner's secret store[^\n]*before the first tenant with live customer data/m, "O-READONLY: who, what it allows, what it never allows, the follow-up");
+    assert.doesNotMatch(text, /Open, owner decision before step 6/, "the step-5 read-path decision is closed");
+    const roleSql = readFileSync(join(REPO_ROOT, "docs/platform/runtime/environments-readonly-role-2026-11-27.sql"), "utf8");
+    assert.match(roleSql, /^alter role alloy_readonly with login [^\n]* bypassrls connection limit 5;$/m, "the role script gives BYPASSRLS");
+    assert.ok(roleSql.includes("alter role alloy_readonly set row_security = off;"), "row_security stays off: a missing BYPASSRLS fails loudly");
+    assert.match(roleSql, /and not r\.rolreplication and r\.rolbypassrls and r\.rolconnlimit = 5/, "check row 1 requires BYPASSRLS");
     const step5 = text.match(/^\| \*\*5\*\* \|[^\n]*$/m)?.[0] ?? "";
     for (const p of ["daily backups, kept 7 days (O-BACKUPS)", "**`tjziptdknxdajzauctha`**", "**`us-west-2`**", "**Resend**", "environments-readonly-role-2026-11-27.sql", "`previous_supabase_project_ref` `vslwnntzzgpnmrpjipat`"]) assert.ok(step5.includes(p), `step 5: ${p}`);
     assert.doesNotMatch(text, /enable PITR|7-day PITR restore|with PITR again|paid add-on/, "no PITR step, PITR restore or add-on is left");
@@ -154,7 +162,7 @@ test("the final cutover plan: no credential, the owner's window, every step and 
     const guide = readFileSync(join(REPO_ROOT, "docs/platform/runtime/environments-owner-dashboard-guide-2026-11-26.md"), "utf8");
     for (const [name, re] of CREDENTIAL_SHAPES) assert.doesNotMatch(guide, re, `guide: ${name}`);
     assert.doesNotMatch(guide, /Turn on point-in-time recovery|does not hold that statement yet/, "the guide has no PITR step and holds the role statement");
-    for (const p of ["environments-readonly-role-2026-11-27.sql", "Database → Roles", "Reset password", "never** in the SQL Editor", "alloy_readonly.tjziptdknxdajzauctha", "permission denied for schema supabase_migrations"]) assert.ok(guide.includes(p), `guide: ${p}`);
+    for (const p of ["environments-readonly-role-2026-11-27.sql", "Database → Roles", "Reset password", "never** in the SQL Editor", "alloy_readonly.tjziptdknxdajzauctha", "permission denied for schema supabase_migrations", "Your exception (2026-11-26, plan O-READONLY)", "**Known limit", "select count(*) from public.orgs"]) assert.ok(guide.includes(p), `guide: ${p}`);
     assert.doesNotMatch(briefing, /backup\/PITR tier|name Firefly's first admin|the owner named at step 6/, "the briefing no longer holds the tier or the first admin open");
 });
 

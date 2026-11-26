@@ -1,7 +1,7 @@
-# ro1_readonly_18071 (the role script's role, test name) with read-only deliberately turned off: what PUBLIC (Supabase's grants to every role) still reaches
+# ro1_readonly_42937 (the role script's role, test name) with read-only deliberately turned off: what PUBLIC (Supabase's grants to every role) still reaches
 ## lo_create
 SET
-large object 1219709
+large object 1278726
 ## net.http_get
 SET
 queued request 1

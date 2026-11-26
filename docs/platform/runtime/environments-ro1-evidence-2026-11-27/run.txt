@@ -1,48 +1,48 @@
 ## shared stack alloy-cert (already running)
   ✓ shared stack 'alloy-cert' already running — joining it (no new containers)
   ✓ synthetic tenant present (org northwind-early-learning)
-  ✓ lease held by 'ro1-readonly-check-18071' (1 active on this stack)
+  ✓ lease held by 'ro1-readonly-check-42937' (1 active on this stack)
     release it when the sprint ends:  alloy-stack release
 supabase_db_alloy-cert: public.ecr.aws/supabase/postgres:17.6.1.165; PostgreSQL 17.6 on aarch64-unknown-linux-gnu; major 17, hosted projects 17: match
   auth supabase_auth_alloy-cert (public.ecr.aws/supabase/gotrue:v2.196.0), storage supabase_storage_alloy-cert (public.ecr.aws/supabase/storage-api:v1.70.3)
-  before: no role ro1_readonly_18071 or alloy_readonly; no database ro1_case_a_18071 or ro1_case_b_18071; cluster roles 3c3e4bf4aab87ca2
-role script: committed environments-readonly-role-2026-11-27.sql sha256 2f8b1ff07ffb99df; run as ro1_readonly_18071: 44 occurrences of alloy_readonly replaced; reversing the substitution gives the committed file byte for byte
+  before: no role ro1_readonly_42937, ro1_control_nobypassrls_42937 or alloy_readonly; no database ro1_case_a_42937 or ro1_case_b_42937; cluster roles 3c3e4bf4aab87ca2
+role script: committed environments-readonly-role-2026-11-27.sql sha256 5b12e1c5480b0a8c; run as ro1_readonly_42937: 44 occurrences of alloy_readonly replaced; reversing the substitution gives the committed file byte for byte
 ## case A: the new project (empty; the role script first, then the chain)
-ro1_case_a_18071: created by postgres in supabase_db_alloy-cert (owner postgres); platform schemas: gotrue_rc=0 (70 auth migrations) storage_rc=0 (63 storage migrations); pg_cron stand-in
-ro1_case_a_18071: role script ran: 9 of 9 checks ok; WRONG rows: 0
+ro1_case_a_42937: created by postgres in supabase_db_alloy-cert (owner postgres); platform schemas: gotrue_rc=0 (70 auth migrations) storage_rc=0 (63 storage migrations); pg_cron stand-in
+ro1_case_a_42937: role script ran: 9 of 9 checks ok; WRONG rows: 0
   before the chain (step 7's reads of the new project):
   before-chain-ledger-if-present postgres rc=0 lines=0    | alloy_readonly rc=0 lines=0    | EQUAL sha256 e3b0c44298fc
   before-chain-fingerprint   postgres rc=0 lines=6    | alloy_readonly rc=0 lines=6    | EQUAL sha256 126ee63c2b06
 psql:<stdin>:1: NOTICE:  schema "supabase_migrations" already exists, skipping
-ro1_case_a_18071: chain applied as postgres: 558 files (20261002120000_scheduled_work_clock_pg_cron.sql with its pg_cron line as a no-op), ledger 558 rows, head 20261223090000
+ro1_case_a_42937: chain applied as postgres: 558 files (20261002120000_scheduled_work_clock_pg_cron.sql with its pg_cron line as a no-op), ledger 558 rows, head 20261223090000
   checks after the chain (the role script's own table, re-read): 9 of 9 ok
-ro1_case_a_18071: seeded org 93667019-bd28-49b5-a688-acc9bb1e0a19 with one site (as postgres): orgs=2 locations=1 role_types=0
+ro1_case_a_42937: seeded org 93667019-bd28-49b5-a688-acc9bb1e0a19 with one site (as postgres): orgs=2 locations=1 role_types=0
   ledger                     postgres rc=0 lines=558  | alloy_readonly rc=0 lines=558  | EQUAL sha256 8f56a396ace0
   ledger-if-present          postgres rc=0 lines=558  | alloy_readonly rc=0 lines=558  | EQUAL sha256 8f56a396ace0
   fingerprint                postgres rc=0 lines=6    | alloy_readonly rc=0 lines=6    | EQUAL sha256 ac485ca01f55
-  census                     postgres rc=0 lines=30   | alloy_readonly rc=3 lines=2    | REFUSED_BY_RLS: query would be affected by row-level security policy for table "buckets"
-  orgs                       postgres rc=0 lines=2    | alloy_readonly rc=3 lines=1    | REFUSED_BY_RLS: query would be affected by row-level security policy for table "orgs"
-  tenant-config-export       postgres rc=0 lines=1    | alloy_readonly rc=3 lines=1    | REFUSED_BY_RLS: query would be affected by row-level security policy for table "orgs"
-  rows hidden (row_security on, own session): rolbypassrls=f, policies naming the role=0; orgs lines=0; orgs 0, locations 0; export org="org" : null
+  census                     postgres rc=0 lines=30   | alloy_readonly rc=0 lines=30   | EQUAL sha256 ff05ecd126a8
+  orgs                       postgres rc=0 lines=2    | alloy_readonly rc=0 lines=2    | EQUAL sha256 d438aea9ba7e
+  tenant-config-export       postgres rc=0 lines=1    | alloy_readonly rc=0 lines=1    | EQUAL sha256 766918315694
+  control (same SELECT grants, NOBYPASSRLS): rolbypassrls role/control=t f; row_security on: orgs lines=0, orgs 0, locations 0, export "org" : null; row_security off: 3 of 3 reads refused by RLS (3 non-zero exits)
   refusals: 35 refused, 0 allowed; census unchanged
   public reach (read-only off): 5 of 5 paths succeeded; still queued: 2; check row 2 then: session settings|WRONG: {default_transaction_read_only=off,s; after a re-run: session settings|ok
-  case A dropped: database ro1_case_a_18071 gone, role ro1_readonly_18071 gone
+  case A dropped: database ro1_case_a_42937 gone, role ro1_readonly_42937 gone
 ## case B: staging (the chain already applied; the role script after it, then run a second time)
-ro1_case_b_18071: created by postgres in supabase_db_alloy-cert (owner postgres); platform schemas: gotrue_rc=0 (70 auth migrations) storage_rc=0 (63 storage migrations); pg_cron stand-in
-ro1_case_b_18071: chain applied as postgres: 558 files (20261002120000_scheduled_work_clock_pg_cron.sql with its pg_cron line as a no-op), ledger 558 rows, head 20261223090000
-ro1_case_b_18071: seeded org 93667019-bd28-49b5-a688-acc9bb1e0a19 with one site (as postgres): orgs=2 locations=1 role_types=0
-ro1_case_b_18071: role script ran: 9 of 9 checks ok; WRONG rows: 0
-ro1_case_b_18071: role script ran: 9 of 9 checks ok; WRONG rows: 0
+ro1_case_b_42937: created by postgres in supabase_db_alloy-cert (owner postgres); platform schemas: gotrue_rc=0 (70 auth migrations) storage_rc=0 (63 storage migrations); pg_cron stand-in
+ro1_case_b_42937: chain applied as postgres: 558 files (20261002120000_scheduled_work_clock_pg_cron.sql with its pg_cron line as a no-op), ledger 558 rows, head 20261223090000
+ro1_case_b_42937: seeded org 93667019-bd28-49b5-a688-acc9bb1e0a19 with one site (as postgres): orgs=2 locations=1 role_types=0
+ro1_case_b_42937: role script ran: 9 of 9 checks ok; WRONG rows: 0
+ro1_case_b_42937: role script ran: 9 of 9 checks ok; WRONG rows: 0
   ledger                     postgres rc=0 lines=558  | alloy_readonly rc=0 lines=558  | EQUAL sha256 8f56a396ace0
   ledger-if-present          postgres rc=0 lines=558  | alloy_readonly rc=0 lines=558  | EQUAL sha256 8f56a396ace0
   fingerprint                postgres rc=0 lines=6    | alloy_readonly rc=0 lines=6    | EQUAL sha256 ac485ca01f55
-  census                     postgres rc=0 lines=30   | alloy_readonly rc=3 lines=2    | REFUSED_BY_RLS: query would be affected by row-level security policy for table "buckets"
-  orgs                       postgres rc=0 lines=2    | alloy_readonly rc=3 lines=1    | REFUSED_BY_RLS: query would be affected by row-level security policy for table "orgs"
-  tenant-config-export       postgres rc=0 lines=1    | alloy_readonly rc=3 lines=1    | REFUSED_BY_RLS: query would be affected by row-level security policy for table "orgs"
-  rows hidden (row_security on, own session): rolbypassrls=f, policies naming the role=0; orgs lines=0; orgs 0, locations 0; export org="org" : null
+  census                     postgres rc=0 lines=30   | alloy_readonly rc=0 lines=30   | EQUAL sha256 5511e7d6c775
+  orgs                       postgres rc=0 lines=2    | alloy_readonly rc=0 lines=2    | EQUAL sha256 def4204d33e4
+  tenant-config-export       postgres rc=0 lines=1    | alloy_readonly rc=0 lines=1    | EQUAL sha256 2235599c2285
+  control (same SELECT grants, NOBYPASSRLS): rolbypassrls role/control=t f; row_security on: orgs lines=0, orgs 0, locations 0, export "org" : null; row_security off: 3 of 3 reads refused by RLS (3 non-zero exits)
   refusals: 35 refused, 0 allowed; census unchanged
   public reach (read-only off): 5 of 5 paths succeeded; still queued: 2; check row 2 then: session settings|WRONG: {default_transaction_read_only=off,s; after a re-run: session settings|ok
-## result: 88 passed, 0 failed (checks took 73s)
+## result: 88 passed, 0 failed (checks took 59s)
 ## teardown proof (shared stack supabase_db_alloy-cert, database postgres)
 databases ro1_*: []
 \du ro1*
@@ -58,6 +58,6 @@ databases ro1_*: []
 \ddp (default privileges: per database; the case databases are gone, so this is the shared database postgres)
   91 lines; lines naming ro1_ or alloy_readonly: 0
 cluster roles, memberships and role settings: before 3c3e4bf4aab87ca2 after 3c3e4bf4aab87ca2 unchanged
-  ✓ lease released by 'ro1-readonly-check-18071'
+  ✓ lease released by 'ro1-readonly-check-42937'
     last lease released, but --keep-running was passed; leaving the stack up
-teardown done after 74s; exit 0
+teardown done after 60s; exit 0

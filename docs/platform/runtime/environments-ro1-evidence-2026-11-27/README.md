@@ -81,27 +81,31 @@ table; and `storage.buckets`. The catalog views need nothing extra.
 Step 14's clock reads (`scheduled_work_clock`, `net._http_response`, `cron.job_run_details`) name no URL in the plan.
 `scheduled_work_clock` is in `public`, so it is covered. The `cron` schema is not granted.
 
-**No BYPASSRLS (Database Engineer review of RO1).** An earlier version of the script gave the role BYPASSRLS, so that
-the census counts, the orgs list and the export saw every row. The role check forbids it: a login with BYPASSRLS reads
-every tenant's rows, customer data included. The script now sets **NOBYPASSRLS** (named, so a re-run takes away a
-BYPASSRLS given earlier) and `row_security = off` on the role's sessions. Every public table has RLS on
+**BYPASSRLS, by owner exception (2026-11-26; plan O-READONLY).** The Database Engineer's review of RO1 found that the
+role had BYPASSRLS, which the role check forbids unless the owner accepts it: a login with BYPASSRLS reads every
+tenant's rows, customer data included. On 2026-11-26 the owner accepted it explicitly, in the Henry thread:
+
+- **Who:** the owner, 2026-11-26. This replaces Henry's earlier automatic choice of `postgres` in a read-only session,
+  which is not used.
+- **What it allows:** the dedicated login `alloy_readonly` reads **every tenant's rows** on the projects it is created
+  on, so the census counts, the orgs list and the step-6 export run through it, the same as `postgres` reads them.
+- **What it never allows:** any write (section 2: every write is refused by privilege, whatever the session's
+  read-only and `row_security` settings), DDL, or a writing function. Its password is held only in the owner's secret
+  store.
+- **Follow-up:** on production, switch the role off (`NOLOGIN`) or narrow it (`NOBYPASSRLS`) **before the first tenant
+  with live customer data (families, attendance or billing) goes live**.
+
+The script names BYPASSRLS and keeps `row_security = off` on the role's sessions. Every public table has RLS on
 (`rls_disabled|0`) and no policy names the role, so:
 
-- the **catalog and ledger reads** (`ledger`, `ledger-if-present`, `fingerprint`) are byte-for-byte equal to
-  `postgres`'s: none of them reads a tenant row;
-- the **reads of tenant rows** (`census`, `orgs`, the export) are **refused**, with
-  `ERROR: query would be affected by row-level security policy for table "…"` and a non-zero exit. That is the point of
-  `row_security = off`: without it they would read 0 orgs and an export with `"org": null`, with no error, and every
-  count and the export would be quietly wrong (the earlier run's no-BYPASSRLS control showed exactly that);
-- if the role turns `row_security` back on in its own session, RLS hides every row: 0 orgs, 0 locations, an export
-  with `"org": null` (`case-*/rows-hidden.txt`). No tenant row is readable either way.
+- every read (`ledger`, `ledger-if-present`, `fingerprint`, `census`, `orgs`, the export) is byte-for-byte equal to
+  `postgres`'s, exit 0;
+- if BYPASSRLS were ever missing, the reads of tenant rows fail **loudly**. The control shows it
+  (`case-*/control-nobypassrls.txt`): a role with the same SELECT grants and NOBYPASSRLS reads 0 orgs, 0 locations and
+  an export with `"org": null`, with no error, while `row_security` is on; with `row_security = off`, the role's own
+  setting, all three reads stop with `ERROR: query would be affected by row-level security policy for table "orgs"`
+  and a non-zero exit. No count or export is ever quietly wrong.
 
-**Open, for the owner: how the reads of tenant rows run.** The runbook that `release runbook` prints, and the plan
-(steps 6, 7, 9, 15b, 16.6, 16.R), run `census` and `orgs` against `$PRODUCTION_DB_URL_READONLY`, and the step-6 export
-against `$STAGING_DB_URL_READONLY`. As this role they now stop with the RLS error above. They need a decision (plan,
-step 5): run them as `postgres` in a read-only session (`PGOPTIONS='-c default_transaction_read_only=on'`), which keeps
-the session read-only but not the privilege wall below; or record the owner's explicit acceptance of a BYPASSRLS read
-login, and put BYPASSRLS back; or give the counts to a narrower function that returns counts and no rows (a new slice).
 Do not add policies for the role: new policies change `policies_md5`, and the fingerprint would no longer equal
 staging's. Nothing in the release tool was changed here.
 
@@ -113,8 +117,8 @@ staging's. Nothing in the release tool was changed here.
 | Chain, as `postgres` | 558 files, ledger 558, head `20261223090000`; the script was **not** run again: its check table, re-read, is 9 of 9 `ok` (`checks-after-chain.txt`) | 558 files, head `20261223090000`, before the script |
 | Step 7 reads before the chain | `ledger-if-present` empty and fingerprint `tables\|0`, equal to `postgres`'s | — |
 | `ledger`, `ledger-if-present` (558 lines), `fingerprint` | each **byte-for-byte equal** to `postgres`'s, exit 0 | each byte-for-byte equal, exit 0 |
-| `census` (30 lines as `postgres`), `orgs`, export | each **refused by RLS** as the role (exit 3, `query would be affected by row-level security policy`); `postgres` exit 0 | the same |
-| `row_security` on, in the role's own session (`rows-hidden.txt`) | `rolbypassrls` `f`, 0 policies name the role; 0 orgs, 0 locations, export `"org" : null` | the same |
+| `census` (30 lines), `orgs` (2 lines), export | each **byte-for-byte equal** to `postgres`'s, exit 0 | each byte-for-byte equal, exit 0 |
+| Control: same grants, NOBYPASSRLS (`control-nobypassrls.txt`) | `rolbypassrls` role `t`, control `f`. `row_security` on: 0 orgs, 0 locations, export `"org" : null`, no error. `row_security = off`: 3 of 3 reads refused by RLS, non-zero exits | the same |
 | Refusals (`refusals.txt`) | 35 refused, 0 allowed; `postgres`'s census unchanged | 35 refused, 0 allowed; census unchanged |
 
 The export ran as `tenant:config:export` runs it (`PGOPTIONS=-c default_transaction_read_only=on`, `-q -A -t -v org_id=…`).
@@ -123,15 +127,13 @@ A local org row (`93667019-…`, one site) stands in for Firefly's.
 **Refused, as `alloy_readonly`** (one session each; each "read-only off" test runs
 `SET default_transaction_read_only = off` as its own statement first):
 
-- Writes in the default session: INSERT, UPDATE and DELETE on `orgs` and `locations` are refused first by RLS
-  (`query would be affected by row-level security policy`, from `row_security = off`); TRUNCATE, which RLS does not
-  cover, by the read-only transaction.
-- Read-only off, then a write: still refused by RLS on `orgs`, `locations` and `storage.buckets`, and by **privilege**
-  (`permission denied for table …`) where RLS is not on: TRUNCATE and a DELETE on the ledger.
-- Read-only off **and** `row_security` back on, then a write, so RLS is out of the way: refused by **privilege**,
-  `permission denied for table …`, for INSERT, UPDATE and DELETE on `orgs` and `locations` and an UPDATE on
-  `storage.buckets`. The privilege wall holds on its own, whatever the session's settings. `BEGIN READ WRITE` is
-  refused too. Public has no sequence on this chain, so `nextval` is skipped.
+- Writes in the default session: INSERT, UPDATE, DELETE and TRUNCATE on `orgs` and `locations` are refused by the
+  read-only transaction.
+- Read-only off, then a write: refused by **privilege**, `permission denied for table …`, on `orgs`, `locations`,
+  `storage.buckets` and the ledger. BYPASSRLS lets the role read past row-level security; it grants no write.
+- Read-only off **and** `row_security` back on, then a write: refused by privilege, the same, for INSERT, UPDATE and
+  DELETE on `orgs` and `locations` and an UPDATE on `storage.buckets`. The privilege wall holds on its own, whatever the
+  session's settings. `BEGIN READ WRITE` is refused too. Public has no sequence on this chain, so `nextval` is skipped.
 - DDL with read-only off: CREATE TABLE and CREATE FUNCTION in public get `permission denied for schema public`. CREATE
   SCHEMA gets `permission denied for database …` (the case database; on a hosted project, `postgres`). ALTER TABLE, DROP TABLE and CREATE INDEX get
   `must be owner of table …`.
@@ -144,7 +146,12 @@ A local org row (`93667019-…`, one site) stands in for Firefly's.
   functions there, the 10 that PUBLIC can execute are 8 trigger functions and 2 stable reads. A direct call to a
   trigger function is refused: `trigger functions can only be called as triggers`.
 
-## 3. What PUBLIC still reaches (measured)
+## 3. Known limit: what PUBLIC still reaches (measured)
+
+**Known limit, open for the owner (a separate decision; recommendation: accept as is).** The first RO1 run found it, and
+it is unchanged by BYPASSRLS. With read-only **deliberately** switched off, the role can still use what Supabase grants
+every role: large objects, temporary tables and pg_net's request queue. It cannot touch an app table, the ledger or
+Storage.
 
 Postgres and Supabase grant some things to every role (PUBLIC). This script cannot take them away from one role, and
 `postgres` cannot revoke Supabase's own grants. **In the role's default read-only session every one of them is
@@ -193,6 +200,6 @@ the transaction pooler (6543) is refused.
 - `ro1-readonly-role-check.sh`: the harness. `run.txt`: its transcript, with the teardown proof.
 - `platform/`: a case database's platform, before any Alloy migration, and the pg_cron stand-in.
 - `queries/`: the exact SQL of each read, with `SHA256SUMS`.
-- `case-a/`, `case-b/`: the role script's output, the chain log, each read as `postgres` and as `alloy_readonly`, the
-  tenant-row reads refused by RLS, `rows-hidden.txt`, `refusals.txt` and `public-reach.txt`.
+- `case-a/`, `case-b/`: the role script's output, the chain log, each read as `postgres` and as `alloy_readonly`,
+  `control-nobypassrls.txt`, `refusals.txt` and `public-reach.txt`.
 - `fp-target-forms.txt`: the connection-string forms against `fp_target` and the export's guard.
