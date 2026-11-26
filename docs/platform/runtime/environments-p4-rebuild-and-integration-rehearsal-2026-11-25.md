@@ -152,6 +152,48 @@ has to show which of main's colliding versions it holds. Staging's renumbered co
 A plain `git merge-tree origin/staging origin/main` conflicts on 7 paths (`candidate/merge-tree.out`). It changes no
 other path, so main holds nothing else that staging lacks.
 
+#### E5 provenance
+
+E5 was a preparation-only owner working session. **No E5 file exists in this repository.** Its evidence was one run of
+the repository's own `scripts/migration-preflight.mjs` against a temporary copy of `origin/main`'s `supabase/migrations`
+at `bbfbec76d`. Henry's record of the E5 report says, quoted:
+
+- "The slice is preparation-only, so the E5 package was never saved to a file in the repo."
+- "I changed no files and made no commits. The only thing I ran was the repository's own scripts/migration-preflight.mjs,
+  against a temporary copy of origin/main's supabase/migrations (origin/main = bbfbec76d). That copy is deleted."
+
+The rest of that report is not available to quote. So the counts in this section are checked against git refs, not
+against an E5 document.
+
+**Re-derivation, 2026-11-26 (slice B4), local refs only, read-only.** Refs as resolved locally, not re-fetched:
+`origin/main` `bbfbec76d7795cc3392b0c61e1c8ce829adaf9d2`, `origin/staging` `8321949771f7fb6b2f04de6feb1fdd6ccb8e1484`,
+this branch (`objective/environments-and-promotion`) `c8480cf34b2ed26e46979cb5b2ec0a61076f6253`.
+
+1. `bash candidate/migration-counts.sh > /tmp/e6r-counts-now.txt; diff candidate/migration-counts.txt /tmp/e6r-counts-now.txt`:
+   exit 0, **no difference**. Every count in the table above re-derives unchanged.
+2. `git ls-tree --name-only <ref> supabase/migrations/`, counted per ref:
+
+   | Ref | Files (all `.sql`) | Distinct versions | Head |
+   |---|---|---|---|
+   | `origin/main` `bbfbec76d779` | 229 | 225 | `20260709120000` |
+   | `origin/staging` `8321949771f7` | 557 | 557 | `20261222090000` |
+   | this branch `c8480cf34b2e` | 557 | 557 | `20261223090000` |
+
+3. `scripts/migration-preflight.mjs` (this branch's copy) on a `git archive <ref> supabase/migrations` export of each ref
+   under `/private/tmp`, deleted afterwards. The path must be the resolved one: from `/tmp` the script's
+   `import.meta.url === file://${argv[1]}` guard does not match, the CLI is skipped, and it exits 0 with no output, which
+   is not a pass.
+   - `origin/main`: `repo: 229 files, 225 unique versions`, `preflight FAILED (4)`, all duplicate versions
+     (`20260630120000` three files, so two findings; `20260630130000`; `20260707120000`), exit 1. These are the three
+     collisions above.
+   - `origin/staging`: `repo: 557 files, 557 unique versions`, `preflight OK`, exit 0.
+   - this branch: `repo: 557 files, 557 unique versions`, `preflight OK`, exit 0.
+
+**No quoted count changed.** This branch is not quoted in the table. It carries 557 too, but not staging's 557:
+`git diff --name-status -M origin/staging HEAD -- supabase/migrations/` is `D 20261222090000_documents_w_c1_audit_linkage.sql`
+and `A 20261223090000_w17_selftest_org_retirement.sql`. The branch forked from staging at `ffb4a53b9` (2026-11-10),
+before staging's head migration landed, and adds the W-17 retirement migration (`e32712bb2`, O3).
+
 ### Disposition of the seven main-only commits
 
 | Commit | Subject | Paths | Disposition | Proof |
