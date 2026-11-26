@@ -30,7 +30,7 @@
  *   rehearse          run the non-live rehearsal (Docker, local only) and keep its evidence
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, realpathSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
@@ -423,7 +423,17 @@ export function renderFirstPromotionRunbook(manifest, config) {
     return `${L.join("\n")}\n`;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Compare real paths: started through a symlinked directory (macOS /tmp is /private/tmp), argv[1] is the link
+// path while import.meta.url is resolved, and a plain string compare would skip every command and exit 0 silently.
+const isMain = () => {
+    try {
+        return Boolean(process.argv[1]) && realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1]);
+    } catch {
+        return false;
+    }
+};
+
+if (isMain()) {
     const a = parseArgs(process.argv.slice(2));
     const cmd = COMMANDS[a._[0]];
     if (!cmd) {

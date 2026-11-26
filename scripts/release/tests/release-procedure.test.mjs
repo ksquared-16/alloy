@@ -6,7 +6,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -683,4 +683,16 @@ test("emit-apply through a pipe delivers the whole file (a large migration is no
     assert.equal(Number(piped.trim()), Buffer.byteLength(wrapMigrationForApply({ version: "20270201000000", name: "big", sql })));
     rmSync(dir, { recursive: true, force: true });
     rmSync(fx.root, { recursive: true, force: true });
+});
+
+test("the CLI runs when started through a symlinked directory (macOS /tmp → /private/tmp), never a silent exit 0", () => {
+    const dir = mkdtempSync(join(tmpdir(), "alloy-release-link-"));
+    try {
+        const link = join(dir, "release");
+        symlinkSync(join(HERE, ".."), link);
+        const out = execFileSync("node", [join(link, "alloy-release.mjs"), "emit-sql", "ledger"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+        assert.match(out, /schema_migrations/);
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
 });
