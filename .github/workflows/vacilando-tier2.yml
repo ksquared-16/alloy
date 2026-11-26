@@ -16,12 +16,30 @@
 # by construction instead of by somebody remembering to edit a list here.
 name: Vacilando Tier 2 (extended, non-blocking)
 
+# ── RETIRED. VACILANDO OWNS ITS OWN CI. ──────────────────────────────────────
+#
+# S5's certification clause was that Vacilando's CI belongs to Vacilando, and
+# that is now true and measured: ksquared-16/vacilando runs tier1 (239
+# blocking), tier2 (extended) and release on every push, and the runtime this
+# machine executes was BUILT by that release workflow — toolkit/current resolves
+# to a generation-2 artifact whose manifest names ksquared-16/vacilando as its
+# producer.
+#
+# Alloy's copy is therefore a second owner of one question, and a second owner
+# is a source of drift rather than of confidence.
+#
+# THE NIGHTLY SCHEDULE IS REMOVED, which is what retires it: `on: schedule` was
+# the only trigger that fired by itself, and GitHub runs scheduled workflows
+# only from the default branch — this one. `workflow_dispatch` is kept so the
+# inventory stays reachable by hand while Vacilando's own Tier 2 is the record.
+#
+# The file is neutralised rather than deleted because the governed
+# repository-metadata class copies declared files into `main`; it has no way to
+# express a deletion, and removing it any other way would cost an Alloy source
+# promotion that this slice is not permitted to spend.
+# ─────────────────────────────────────────────────────────────────────────────
+
 on:
-  schedule:
-    # Nightly. Measured on the host at roughly 25-40 minutes for the full
-    # inventory, which is too slow to put in front of every PR and cheap enough
-    # to run once a day.
-    - cron: "0 11 * * *"
   workflow_dispatch:
     inputs:
       tested_ref:
