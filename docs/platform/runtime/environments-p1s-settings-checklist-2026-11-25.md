@@ -50,10 +50,10 @@ dashboard settings in §C.2 that have no environment name.
 |---|---|---|
 | **R** | Required: the app is broken or unsafe without it | Set |
 | **C** | Required if that capability is live in production (payments, email, SMS, AI) | Set when the capability is on |
-| **O** | Optional; unset uses a code default | Leave unset unless the owner decides otherwise |
-| **F** | Feature flag; unset uses a code default | Copy staging (owner decision D6): set to staging's value where staging sets it; leave unset where staging does not |
+| **O** | Optional; unset uses a code default | Leave unset, unless owner check C-O-1 shows staging's value is a real business setting (briefing I-18) |
+| **F** | Feature flag; unset uses a code default | Copy staging (D6): every F key staging sets, at staging's value; unset where staging leaves it unset — except the drawer-strip pair, which is always set (briefing §5.5) |
 | **A** | Alias or fallback of another key | Leave unset, or equal to the primary |
-| **L** | Legacy path | Owner decision; usually unset |
+| **L** | Legacy path | Unset at cutover (D3: no tenant exists yet); set after briefing step 16 only if the legacy route is used |
 | **S** | Staging marker | Must not be set (or must not say `staging`) on production |
 | **D** | Diagnostics or debug | Leave unset |
 | **X** | Certification, QA, test or local only | Must not be set on any deployed scope |
@@ -97,7 +97,7 @@ scope *before* the production build, and redeploy after any change; editing one 
 | `SUPABASE_URL` | R | Set: same URL as `NEXT_PUBLIC_SUPABASE_URL` | `lib/supabaseAdmin.ts` reads it first; a different URL splits auth cookies (`warnIfAuthSupabaseUrlMismatch`) | `web/app/api/admin/jobs/[id]/assign-vendor/route.ts:44` |
 | `DOCUMENT_API_UPLOAD_SECRET` | C | Set if the public document-upload API is used; its own secret | Falls back to the three secrets above; in production with none, uploads are refused | `web/lib/documents/external/externalDocumentWrites.ts:91` |
 | `MARKETING_DEMO_FROM` | C | Set: a verified sender for the demo-request mail | Code default is Resend's onboarding sender | `web/app/api/marketing/demo-request/route.ts:61` |
-| `NEXT_PUBLIC_META_PIXEL_ID` | C | Owner decision: set only if the production marketing pixel is wanted | Build-time; ships to the browser | `web/components/MetaPixel.tsx:8` |
+| `NEXT_PUBLIC_META_PIXEL_ID` | C | Owner check: set only if the production marketing pixel is wanted | Build-time; ships to the browser | `web/components/MetaPixel.tsx:8` |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | C | Set if payments are live: live publishable key | Build-time. Must be the same Stripe account and mode as the secret key | `web/lib/financials/payments/stripePublishableKey.ts:31` |
 | `OPENAI_API_KEY` | C | Set if AI enrichment is wanted in production | Live enrichment needs both this and `OPENAI_MODEL` | `web/lib/ai/aiEnrichmentEnv.ts:23` |
 | `OPENAI_MODEL` | C | Set with `OPENAI_API_KEY` |  | `web/lib/ai/aiEnrichmentEnv.ts:24` |
@@ -108,11 +108,11 @@ scope *before* the production build, and redeploy after any change; editing one 
 | `STRIPE_WEBHOOK_SECRET` | C | Set if payments are live: signing secret of the production webhook endpoint | Endpoint `/api/stripe/webhook` | `web/app/api/stripe/webhook/route.ts:34` |
 | `TWILIO_AUTH_TOKEN` | C | Set if SMS is live | Webhook signature checks; default `env:TWILIO_AUTH_TOKEN` binding reference | `web/lib/communications/providerCredentialCatalog.ts:100` |
 | `ADMIN_DOCUMENTS_BUCKET` | O | Leave unset (default bucket `org_documents`, created by migration) | If set, the bucket must exist in the production project | `web/app/api/admin/documents/upload/route.ts:216` |
-| `ALLOY_CANCELLATION_FEE_CENTS` | O | Owner decision: carry staging's only if it is a business setting; else code default |  | `web/lib/charges/cancellationFeeCharge.ts:12` |
-| `ALLOY_CANCELLATION_FEE_WITHIN_HOURS` | O | Owner decision: carry staging's only if it is a business setting; else code default |  | `web/lib/charges/cancellationFeeCharge.ts:41` |
-| `ALLOY_DEFAULT_BUSINESS_TIMEZONE` | O | Owner decision: carry staging's only if it is a business setting; else code default |  | `web/lib/bookingConfirmationSms.ts:12` |
+| `ALLOY_CANCELLATION_FEE_CENTS` | O | Owner check (C-O-1): carry staging's only if it is a business setting; else code default |  | `web/lib/charges/cancellationFeeCharge.ts:12` |
+| `ALLOY_CANCELLATION_FEE_WITHIN_HOURS` | O | Owner check (C-O-1): carry staging's only if it is a business setting; else code default |  | `web/lib/charges/cancellationFeeCharge.ts:41` |
+| `ALLOY_DEFAULT_BUSINESS_TIMEZONE` | O | Owner check (C-O-1): carry staging's only if it is a business setting; else code default |  | `web/lib/bookingConfirmationSms.ts:12` |
 | `MARKETING_DEMO_INBOX` | O | Leave unset to use the code default sales inbox |  | `web/app/api/marketing/demo-request/route.ts:6` |
-| `NEXT_PUBLIC_BOOKING_PATH` | O | Owner decision: carry staging's only if it is a business setting; else code default |  | `web/lib/booking.ts:17` |
+| `NEXT_PUBLIC_BOOKING_PATH` | O | Owner check (C-O-1): carry staging's only if it is a business setting; else code default |  | `web/lib/booking.ts:17` |
 | `OPENAI_BASE_URL` | O | Leave unset unless staging deliberately overrides | Code default applies | `web/lib/ai/aiEnrichmentEnv.ts:35` |
 | `OPENAI_CHAT_TEMPERATURE` | O | Leave unset unless staging deliberately overrides | Code default applies | `web/lib/ai/openAiModelCapabilities.ts:15` |
 | `OPENAI_REQUEST_TIMEOUT_MS` | O | Leave unset unless staging deliberately overrides | Code default applies | `web/lib/ai/aiEnrichmentEnv.ts:52` |
@@ -137,7 +137,7 @@ scope *before* the production build, and redeploy after any change; editing one 
 | `CHILDCARE_OPERATIONAL_ENROLLMENT_V1_ENABLED` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/lib/childcareOperational/featureFlag.ts:38` |
 | `COMMUNICATION_DUAL_WRITE` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/lib/communications/communicationsEnabled.ts:3` |
 | `DOCUMENTS_MALWARE_SCANNER_ENABLED` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/lib/documents/malware/inboundReevaluation.ts:35` |
-| `DRAWER_SUMMARY_STRIP_BOUNDARY` | F | Copy staging (D6): staging's value if staging sets it; else unset | Unset defaults OFF in production and ON in staging (`featureFlag.ts:266-276`). No runtime code calls the reader (only `web/tests/`), so the difference changes nothing today and the D6 rule alone preserves staging's behaviour. If a caller appears and staging leaves it unset, set `1` | `web/lib/layout/featureFlag.ts:287` |
+| `DRAWER_SUMMARY_STRIP_BOUNDARY` | F | **Always set (D6):** staging's value if staging sets it; else `1` | Unset defaults differ: OFF in production, ON on staging's preview deployment (`featureFlag.ts:266-276`, reader `:286-287`), so leaving it unset would not mirror staging. No runtime caller today (only `web/tests/`); set anyway so production keeps staging's behaviour if one lands | `web/lib/layout/featureFlag.ts:287` |
 | `FIELD_REQUIREMENT_POLICY_ENFORCEMENT_ENABLED` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/lib/fields/fieldRequirementPolicyEnv.ts:7` |
 | `FOCUS_PANEL_LAYOUT_RUNTIME_ENABLED` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/lib/layout/featureFlag.ts:255` |
 | `INBOUND_EMAIL_ATTACHMENT_RETRIEVAL_ENABLED` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/lib/communications/email/inboundAttachmentRetrieval.ts:9` |
@@ -171,7 +171,7 @@ scope *before* the production build, and redeploy after any change; editing one 
 | `NEXT_PUBLIC_COMMS_V2_SLA` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/communications/v2/flags.ts:100` |
 | `NEXT_PUBLIC_COMMS_V2_TEMPLATES` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/communications/v2/flags.ts:102` |
 | `NEXT_PUBLIC_CONFIGURATION_RUNTIME_PHASE_3A` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/adminV2/runtime/configurationRuntimeConvergenceFlag.ts:12` |
-| `NEXT_PUBLIC_DRAWER_SUMMARY_STRIP_BOUNDARY` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time. Same environment-dependent default and the same finding: no runtime caller | `web/lib/layout/featureFlag.ts:291` |
+| `NEXT_PUBLIC_DRAWER_SUMMARY_STRIP_BOUNDARY` | F | **Always set (D6):** staging's value if staging sets it; else `1` | Build-time. Same environment-dependent default (reader `featureFlag.ts:290-291`); in the browser `VERCEL_ENV` is not inlined, so step 6 also records staging's `NEXT_PUBLIC_APP_ENV` (briefing §5.5) | `web/lib/layout/featureFlag.ts:291` |
 | `NEXT_PUBLIC_FOCUS_PANEL_LAYOUT_RUNTIME_ENABLED` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/layout/featureFlag.ts:259` |
 | `NEXT_PUBLIC_LAYOUT_RUNTIME_CHILD_DRAWER` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/layout/featureFlag.ts:179` |
 | `NEXT_PUBLIC_LAYOUT_RUNTIME_ENABLED` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/layout/featureFlag.ts:74` |
@@ -194,10 +194,10 @@ scope *before* the production build, and redeploy after any change; editing one 
 | `COMMUNICATIONS_STAGING_SMS_ALLOWLIST` | S | Must not be set on Production | Only meaningful in a restricted runtime | `web/lib/communications/stagingOutboundRecipientGuard.ts:28` |
 | `NEXT_PUBLIC_APP_ENV` | S | Leave unset (or `production`). `staging` here makes production restricted | A staging signal to the outbound guard. Several reads default to production when unset | `web/app/api/leads/gutters/route.ts:131` |
 | `NEXT_PUBLIC_LAYOUT_RUNTIME_STAGING_DEBUG` | S | Must not be set on Production | Staging diagnostics | `web/lib/layout/runtime/layoutRuntimeEvidenceClient.ts:9` |
-| `ALLOY_PUBLIC_ORG_ID` | L | Owner decision | Default org for older public intake routes (`/api/vendor-application`, `/api/leads/gutters`, action-link consume) | `web/app/api/action/[token]/consume/route.ts:58` |
-| `BOOK_V2_BOOKED_STAGE_ID` | L | Owner decision; ids are per database, so a staging value is wrong in production | Book v2 pipeline stage ids | `web/lib/book-v2/resolvePipelineStage.ts:162` |
-| `BOOK_V2_NEEDS_A_QUOTE_STAGE_ID` | L | Owner decision; ids are per database, so a staging value is wrong in production | Book v2 pipeline stage ids | `web/lib/book-v2/resolvePipelineStage.ts:159` |
-| `BOOK_V2_QUOTE_STARTED_STAGE_ID` | L | Owner decision; ids are per database, so a staging value is wrong in production | Book v2 pipeline stage ids | `web/lib/book-v2/resolvePipelineStage.ts:155` |
+| `ALLOY_PUBLIC_ORG_ID` | L | Unset at cutover; after step 16, Firefly's new id only if the route is used | Default org for older public intake routes (`/api/vendor-application`, `/api/leads/gutters`, action-link consume) | `web/app/api/action/[token]/consume/route.ts:58` |
+| `BOOK_V2_BOOKED_STAGE_ID` | L | Unset at cutover; ids are per database, so a staging value is wrong in production | Book v2 pipeline stage ids | `web/lib/book-v2/resolvePipelineStage.ts:162` |
+| `BOOK_V2_NEEDS_A_QUOTE_STAGE_ID` | L | Unset at cutover; ids are per database, so a staging value is wrong in production | Book v2 pipeline stage ids | `web/lib/book-v2/resolvePipelineStage.ts:159` |
+| `BOOK_V2_QUOTE_STARTED_STAGE_ID` | L | Unset at cutover; ids are per database, so a staging value is wrong in production | Book v2 pipeline stage ids | `web/lib/book-v2/resolvePipelineStage.ts:155` |
 | `NEXT_PUBLIC_API_BASE_URL` | L | Leave unset | Read only by `web/lib/api.ts`, which nothing in the runtime roots imports | `web/lib/api.ts:6` |
 | `ADMIN_PERF_TRACE` | D | Leave unset |  | `web/app/api/admin/debug/inbound-ingress/route.ts:34` |
 | `ALLOY_PLACEMENT_FACT_SOURCES_DEBUG` | D | Leave unset |  | `web/lib/orchestration/placement/applyPlacementV2ToOpportunityQueueRows.ts:263` |
@@ -308,12 +308,12 @@ scope *before* the production build, and redeploy after any change; editing one 
 | `RENDER_GIT_COMMIT` | P | Do not set (Render-provided) | Served by `GET /build-info` | `backend/app/server.py:46` |
 <!-- /settings -->
 
-## C. Supabase — production project
+## C. Supabase — production project (the new `us-west-2` project, D2)
 
 ### C.1 Schema-level settings (from `supabase/migrations`)
 
-The migrations create each of these, but production has not had the staging migration chain applied (P2, P4), so check
-each one after the first promotion's schema step.
+The migrations create each of these. Production moves to a new `us-west-2` project built from the full chain (D2), so
+check each one on that project after the first promotion's schema step (briefing §4). The existing project is not changed.
 
 <!-- settings:supabase -->
 | Key | Class | Production | Notes | Read at |
@@ -367,10 +367,11 @@ separate secret for each.
 ## E. What the code cannot tell you (uncovered)
 
 1. **Staging's actual settings.** Which F, O and L keys staging sets, and to what, needs the Vercel and Render dashboards.
-   For F rows the owner has decided (D6): each key staging sets is copied to production with staging's value; a key staging
-   leaves unset stays unset. Only the copying is left, not a choice. The one F pair whose unset default differs between
-   staging and production (`DRAWER_SUMMARY_STRIP_BOUNDARY`, `NEXT_PUBLIC_DRAWER_SUMMARY_STRIP_BOUNDARY`) has no runtime
-   caller, so the copy rule preserves staging's behaviour without setting it explicitly.
+   For F rows the owner has decided (D6): every key staging sets is copied to production with staging's value; a key
+   staging leaves unset stays unset. Only the copying is left, not a choice. The one F pair whose unset default differs
+   between staging and production (`DRAWER_SUMMARY_STRIP_BOUNDARY`, `NEXT_PUBLIC_DRAWER_SUMMARY_STRIP_BOUNDARY`,
+   `web/lib/layout/featureFlag.ts:283-291`) is **always set** on production, to staging's value or `1`, so production
+   behaves as staging does (briefing §5.5).
 2. **Keys set on a platform that no code reads.** Not detectable from code. Anything on staging's lists that is not in
    this document should not be carried. One example is already in the repo: `backend/README_MESSAGES_SENDER.md` lists
    `TWILIO_FROM_NUMBER` as required, and no backend code reads it.
@@ -401,8 +402,8 @@ document lists it. At cutover, in the order the code needs:
 4. §C.2 before the first invite or password reset goes out.
 5. Every **S** and **X** row checked **absent** on the production scopes.
 
-The ordered runbook for the first promotion, with each issue above labelled and the owner's settled decisions D1–D8 applied, is the
-[first-promotion briefing](environments-p1s-first-promotion-briefing-2026-11-25.md).
+The single cutover plan for the first promotion, with each issue above labelled and the owner's settled decisions D1–D11
+applied, is the [first-promotion briefing](environments-p1s-first-promotion-briefing-2026-11-25.md).
 
 ## Not a setting (scanner candidates excluded)
 

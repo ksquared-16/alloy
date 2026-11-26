@@ -12,6 +12,7 @@ import { dirname, join } from "node:path";
 import { REPO_ROOT, scanSettings } from "../settings-inventory.mjs";
 
 const CHECKLIST = "docs/platform/runtime/environments-p1s-settings-checklist-2026-11-25.md";
+const BRIEFING = "docs/platform/runtime/environments-p1s-first-promotion-briefing-2026-11-25.md";
 const TIERS = ["web", "backend", "supabase"];
 const CLASSES = new Set(["R", "C", "O", "F", "A", "L", "S", "D", "X", "B", "P"]);
 
@@ -74,20 +75,29 @@ test("each row has a known class, and its cited file reads the key", () => {
     }
 });
 
+const CREDENTIAL_SHAPES = [
+    ["JWT (Supabase key)", /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/],
+    ["Supabase secret key", /sb_(secret|publishable)_[A-Za-z0-9_-]{8,}/],
+    ["Stripe key", /\b(sk|pk|rk)_(live|test)_[A-Za-z0-9]{8,}/],
+    ["Stripe webhook secret", /\bwhsec_[A-Za-z0-9]{8,}/],
+    ["Resend key", /\bre_[A-Za-z0-9]{16,}/],
+    ["Twilio SID", /\b(AC|MG|SK)[0-9a-f]{32}\b/],
+    ["OpenAI key", /\bsk-[A-Za-z0-9_-]{16,}/],
+    ["connection string with password", /postgres(ql)?:\/\/[^\s:@/]+:[^\s@/]+@/],
+    ["KEY=value assignment", /\b[A-Z][A-Z0-9_]{3,}=(?!production\b|staging\b|preview\b)[^\s`|]+/],
+];
+
 test("the checklist contains no credential-shaped value", () => {
     const text = readFileSync(join(REPO_ROOT, CHECKLIST), "utf8");
-    const shapes = [
-        ["JWT (Supabase key)", /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/],
-        ["Supabase secret key", /sb_(secret|publishable)_[A-Za-z0-9_-]{8,}/],
-        ["Stripe key", /\b(sk|pk|rk)_(live|test)_[A-Za-z0-9]{8,}/],
-        ["Stripe webhook secret", /\bwhsec_[A-Za-z0-9]{8,}/],
-        ["Resend key", /\bre_[A-Za-z0-9]{16,}/],
-        ["Twilio SID", /\b(AC|MG|SK)[0-9a-f]{32}\b/],
-        ["OpenAI key", /\bsk-[A-Za-z0-9_-]{16,}/],
-        ["connection string with password", /postgres(ql)?:\/\/[^\s:@/]+:[^\s@/]+@/],
-        ["KEY=value assignment", /\b[A-Z][A-Z0-9_]{3,}=(?!production\b|staging\b|preview\b)[^\s`|]+/],
-    ];
-    for (const [name, re] of shapes) assert.doesNotMatch(text, re, name);
+    for (const [name, re] of CREDENTIAL_SHAPES) assert.doesNotMatch(text, re, name);
+});
+
+test("the first-promotion briefing: no credential, every settled decision, no dangling label", () => {
+    const text = readFileSync(join(REPO_ROOT, BRIEFING), "utf8");
+    for (const [name, re] of CREDENTIAL_SHAPES) assert.doesNotMatch(text, re, name);
+    const table = text.split("## Settled owner decisions")[1]?.split("\n## ")[0] ?? "";
+    for (let i = 1; i <= 11; i++) assert.match(table, new RegExp(`^\\| \\*\\*D${i}\\*\\* \\|`, "m"), `D${i} is in the settled-decisions table`);
+    assert.doesNotMatch(text, /\bOPEN-[A-Z]\b|\bD-[A-Z]\b|see report/, "a label that names no decision in this document");
 });
 
 test("scanner: each detection rule, on a fixture tree", () => {
