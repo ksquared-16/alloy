@@ -1,0 +1,35 @@
+export: local postgresql://postgres:***@127.0.0.1:54422/firefly_seed_scratch_b3_source  org 93667019-bd28-49b5-a688-acc9bb1e0a19
+  kinds: sites, rooms, household_role_types, enrollment_process
+  source org: Firefly Early Learning
+  items: {"sites":0,"rooms":0,"household_role_types":0,"enrollment_process":0}
+  left behind: 27
+    - sites: North Campus (metadata.seed)
+    - sites: South Campus (metadata.seed)
+    - sites: West Campus (metadata.seed)
+    - rooms: Bears (metadata.seed)
+    - rooms: Giraffe (metadata.seed)
+    - rooms: Infant A (metadata.seed)
+    - rooms: Infant A (metadata.seed)
+    - rooms: Infant B (metadata.seed)
+    - rooms: Infant B (metadata.seed)
+    - rooms: Monkeys (metadata.seed)
+    - rooms: Pre-K (metadata.seed)
+    - rooms: Preschool (metadata.seed)
+    - rooms: Preschool 1 (metadata.seed)
+    - rooms: Preschool 2 (metadata.seed)
+    - rooms: Tigers (metadata.seed)
+    - rooms: Toddler 1 (metadata.seed)
+    - rooms: Toddler 1 (metadata.seed)
+    - rooms: Toddler 2 (metadata.seed)
+    - rooms: Toddler 2 (metadata.seed)
+    - rooms: Zebras (metadata.seed)
+    - household_role_types: child (metadata.seed)
+    - household_role_types: parent (metadata.seed)
+    - household_role_types: guardian (metadata.seed)
+    - household_role_types: emergency_contact (metadata.seed)
+    - household_role_types: authorized_pickup (metadata.seed)
+    - household_role_types: payer (metadata.seed)
+    - enrollment_process: lead_management (seed id namespace)
+  metadata keys dropped: none
+✓ wrote /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/refusals/export-without-keep-seed-config.json
+  sha256 50fb94850c65cdd6dd367021d406b260ca434307b6f9e4eae54c5c5aafaabdab

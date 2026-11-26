@@ -1,0 +1,5 @@
+started: tenant:create --target local --supabase-url http://127.0.0.1:50513 --name Firefly Early Learning --slug firefly-early-learning --industry childcare --admin-user-id b7bec213-bfd0-429f-ae76-a476ea380bde --admin-email someone-else@b3-rehearsal.invalid --admin-full-name x --log /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/step16-tenant-create.log
+target: local http://127.0.0.1:50513
+orgs now (1):
+  6b338219-44f7-47d4-8c87-e499fbf57480|retired|_w17_selftest_6b338219
+✗ refused (admin_email_mismatch): Auth user b7bec213-bfd0-429f-ae76-a476ea380bde is firefly-admin@b3-rehearsal.invalid, not someone-else@b3-rehearsal.invalid

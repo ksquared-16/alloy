@@ -1,0 +1,67 @@
+started: tenant:config:import apply apply --target local --supabase-url http://127.0.0.1:50513 --org-id 9d471491-ff8b-483c-86e9-049d8a0fae49 --admin-user-id b7bec213-bfd0-429f-ae76-a476ea380bde --log /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/step16-retry-import.log --file /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/firefly-config-export.json --expect-sha256 409b36eb81557cd40bb83555157a390aa144d7827dbb6bfdbd62dd5228289513
+file: /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/firefly-config-export.json  sha256 409b36eb81557cd40bb83555157a390aa144d7827dbb6bfdbd62dd5228289513
+export of "Firefly Early Learning" (local, 2026-11-26T06:31:11.690Z): {"sites":3,"rooms":17,"household_role_types":6,"enrollment_process":1}
+target: local http://127.0.0.1:50513
+org: 9d471491-ff8b-483c-86e9-049d8a0fae49|active|Firefly Early Learning (firefly-early-learning)
+plan (27 item(s)):
+  create          site:north-campus                        site "North Campus"
+  create          site:south-campus                        site "South Campus"
+  create          site:west-campus                         site "West Campus"
+  create          room:south-campus/bears                  room "Bears" at South Campus
+  create          room:south-campus/giraffe                room "Giraffe" at South Campus
+  create          room:north-campus/infant-a               room "Infant A" at North Campus
+  create          room:west-campus/infant-a                room "Infant A" at West Campus
+  create          room:north-campus/infant-b               room "Infant B" at North Campus
+  create          room:west-campus/infant-b                room "Infant B" at West Campus
+  create          room:south-campus/monkeys                room "Monkeys" at South Campus
+  create          room:north-campus/pre-k                  room "Pre-K" at North Campus
+  create          room:west-campus/preschool               room "Preschool" at West Campus
+  create          room:north-campus/preschool-1            room "Preschool 1" at North Campus
+  create          room:north-campus/preschool-2            room "Preschool 2" at North Campus
+  create          room:south-campus/tigers                 room "Tigers" at South Campus
+  create          room:north-campus/toddler-1              room "Toddler 1" at North Campus
+  create          room:west-campus/toddler-1               room "Toddler 1" at West Campus
+  create          room:north-campus/toddler-2              room "Toddler 2" at North Campus
+  create          room:west-campus/toddler-2               room "Toddler 2" at West Campus
+  create          room:south-campus/zebras                 room "Zebras" at South Campus
+  create          role_type:child                          role type child
+  create          role_type:parent                         role type parent
+  create          role_type:guardian                       role type guardian
+  create          role_type:emergency_contact              role type emergency_contact
+  create          role_type:authorized_pickup              role type authorized_pickup
+  create          role_type:payer                          role type payer
+  create          process:lead_management/enrollment       department lead_management "Enrollment", publish process enrollment (8 stages), derive work units
+summary: 27 to create, 0 to complete, 0 already present, 0 present but different (left unchanged)
+Write 27 item(s) into "Firefly Early Learning" on local http://127.0.0.1:50513? Type "9d471491" to proceed: 
+confirmed: "9d471491"
+  written site:north-campus
+  written site:south-campus
+  written site:west-campus
+  written room:south-campus/bears
+  written room:south-campus/giraffe
+  written room:north-campus/infant-a
+  written room:west-campus/infant-a
+  written room:north-campus/infant-b
+  written room:west-campus/infant-b
+  written room:south-campus/monkeys
+  written room:north-campus/pre-k
+  written room:west-campus/preschool
+  written room:north-campus/preschool-1
+  written room:north-campus/preschool-2
+  written room:south-campus/tigers
+  written room:north-campus/toddler-1
+  written room:west-campus/toddler-1
+  written room:north-campus/toddler-2
+  written room:west-campus/toddler-2
+  written room:south-campus/zebras
+  written role_type:child
+  written role_type:parent
+  written role_type:guardian
+  written role_type:emergency_contact
+  written role_type:authorized_pickup
+  written role_type:payer
+    published revision 1 (d23d92a9-abfc-4db5-b908-958c54fdeb3e)
+    opportunity drawer override: provisioned
+    work units: the export names no lane work units; none derived
+  written process:lead_management/enrollment
+✓ wrote 27 item(s); run verify next

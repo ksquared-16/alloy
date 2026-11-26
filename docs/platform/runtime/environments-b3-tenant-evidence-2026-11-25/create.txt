@@ -1,0 +1,18 @@
+started: tenant:create --target local --supabase-url http://127.0.0.1:50513 --name Firefly Early Learning --slug firefly-early-learning --industry childcare --admin-user-id b7bec213-bfd0-429f-ae76-a476ea380bde --admin-email firefly-admin@b3-rehearsal.invalid --admin-full-name Firefly Admin (B3 rehearsal) --log /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/step16-tenant-create.log
+target: local http://127.0.0.1:50513
+orgs now (1):
+  6b338219-44f7-47d4-8c87-e499fbf57480|retired|_w17_selftest_6b338219
+admin b7bec213-bfd0-429f-ae76-a476ea380bde (firefly-admin@b3-rehearsal.invalid) holds 0 membership(s) today
+plan:
+  set the admin account's name (Auth user_metadata.full_name) to "Firefly Admin (B3 rehearsal)"
+  insert orgs: id 5ad76c7c-fd07-40c1-9c01-bc28f7a9ece8, name "Firefly Early Learning", slug firefly-early-learning, status active, industry childcare (b6f133c6-f2ec-46d1-9bb7-aa44c31dc4b1)
+  insert one admin membership for b7bec213-bfd0-429f-ae76-a476ea380bde (firefly-admin@b3-rehearsal.invalid) via create_membership_with_access_profile
+  provision the person-child relationship field configuration (sections, option sets, field definitions)
+  nothing else: no demo data, no records, no other users
+Create org "Firefly Early Learning" on local http://127.0.0.1:50513? Type "firefly-early-learning" to proceed: 
+confirmed: "firefly-early-learning"
+admin account named "Firefly Admin (B3 rehearsal)"
+created org 5ad76c7c-fd07-40c1-9c01-bc28f7a9ece8 slug firefly-early-learning
+memberships in the new org: b7bec213-bfd0-429f-ae76-a476ea380bde|admin
+ORG_ID=5ad76c7c-fd07-40c1-9c01-bc28f7a9ece8
+done

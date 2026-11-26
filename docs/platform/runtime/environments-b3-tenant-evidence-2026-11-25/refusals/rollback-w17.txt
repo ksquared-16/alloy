@@ -1,0 +1,9 @@
+BEGIN
+SET
+              set_config              |       set_config       
+--------------------------------------+------------------------
+ 6b338219-44f7-47d4-8c87-e499fbf57480 | _w17_selftest_6b338219
+(1 row)
+
+psql:<stdin>:105: ERROR:  rollback refused (org_not_active): org 6b338219-44f7-47d4-8c87-e499fbf57480 is retired
+CONTEXT:  PL/pgSQL function inline_code_block line 20 at RAISE

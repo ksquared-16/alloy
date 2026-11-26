@@ -73,10 +73,10 @@ open at T+0:00 is a no-go (step 7).
 | **M2** | **The W-17 retirement migration is written but not on `staging`.** Slice B1 committed `supabase/migrations/20261223090000_w17_selftest_org_retirement.sql` on this branch, numbered after `origin/staging`'s head `20261222090000`. For every org whose slug starts with `_w17_selftest_` it sets `status` `retired` and `name` to the slug. Rows are kept: the org's 6 role definitions, 158 grants, 10 document categories and 13 document types stay, unchanged, as configuration of an org with no members. The migration fails if the org has any role or access-profile row. It is forward-only and re-runnable, a no-op where no such org exists, and release-lib classifies it `expand`. **Why the name changes too:** release-lib recognises a self-test org by `name` (`ORGS_SQL` lists `id\|status\|name`, `release-lib.mjs:412`, `:429`), but the self-test names it `W-17 self-test`. With that name, staging verification fails it as "neither Firefly nor a ZZ Alloy QA fixture", and `:429` passes it whatever its status | D10. `check-production` must see a retired self-test org (`release-lib.mjs:429`); production may only receive migrations staging ran (`release-lib.mjs:149`) | P4 F3; `rebuild/w17-removal-trial.txt` (a plain delete fails on `document_category_in_use`). B1, on throwaway local Supabase Postgres ([`environments-b1-w17-evidence-2026-11-25/`](environments-b1-w17-evidence-2026-11-25/)): the full 558-file step-1 merge tree applied from nothing exits 0 and leaves the org `retired` (`A-apply.log`, `A-after-chain-census.txt`). Staging's state (chain to `20261222090000`, org `active`) becomes `retired` with every owned row count unchanged (`B1-…`, `B2-…-census.txt`). Re-applying it changes nothing (`B3-reapply.txt`), and neither does a database with no W-17 org (`B4-no-org-trial.txt`). release-lib's two tenancy checks pass on every post-migration listing and fail staging's current one (`release-checks.txt`). Release and migration-ordering suites are green (`test-runs.txt`) | Step 1: the migration is merged with E1–E4, staging's ledger holds `20261223090000`, and staging's W-17 org reads `retired` with name `_w17_selftest_0bbaad43`. Developer |
 | **M3** | **The release tool has no first-promotion mode.** `plan` over an empty ledger is **blocked** (`contract_not_last`, 45 contract files among 557, the first `20260329210000`), and `production.preflight` expects production to serve the old `main` on the project named in `release-config.json` | D9. Without it, `prepare` writes no manifest, so `approve`, `emit-apply`, `record` and the hash-chained audit have nothing to bind | `plan-empty-ledger-p4-candidate.json`; P6 procedure *Limits*. **Built by slice B2** (`f60f1ae66`): `--first-promotion` on `plan`/`prepare` (§4); procedure *First promotion (opt-in mode)*. Offline tests 44/44 (with the §9 retired-org list, `5ea249e5b`) and Docker rehearsal suite 26/26 (9 first-promotion scenarios), and the full-chain rehearsal against an empty local ledger, re-run on `5ea249e5b`: 558/558 applied, census pass, `verify-audit` exit 0 (568 entries), staging verification passing with Alloy Bend `retired` and refusing it `active` ([`environments-b2-first-promotion-evidence-2026-11-25/`](environments-b2-first-promotion-evidence-2026-11-25/)) | The mode is committed with offline tests (`npm run test:release-procedure`) and rehearsed non-live. Developer, before step 5. **Built and rehearsed on this branch (B2)**; it closes when it reaches `staging` with step 1's merge |
 | **M4** | **`release-config.json` names the old production project** (`vslwnntzzgpnmrpjipat`) | Every check against production after cutover must expect the new ref (`checkBuildInfo` compares `supabaseProjectRef`) | `scripts/release/release-config.json`; `alloy-release.mjs` `loadConfig` (`--config` overrides the file for one run). **B2** added the generator: `release first-promotion-config --new-ref <ref> --out releases/<date>-<sha12>/release-config.json` writes the copy (production on the new ref, `previous_supabase_project_ref` the old one, the committed policy otherwise, `derived_from_sha256`). A first-promotion manifest binds both refs; `approve`, `record`, `check-production` and `runbook` refuse any config naming others, and `prepare --first-promotion` refuses the committed file (rehearsal `refusals/`). The committed file's production ref is unchanged; its only B2 change is the §9 list `tenancy.staging_retired_orgs`, which the copy inherits | Step 5: a config copy naming the new ref in the release directory, written by that command (§4). The committed file follows in the next release |
-| **M5** | **The existing org helper has no reviewed production invocation.** D11 uses the existing helper `web/lib/dev/createOrgAndAssignAdmin.ts`; no new helper is written. It inserts one `orgs` row (industry `childcare`, seeded by `20260430211000`), one `admin` membership through `create_membership_with_access_profile`, and the relationship-field configuration (`field_section_definitions`, `option_sets`, `option_set_items`, `field_definitions`); it needs an existing `auth.users` id. Its current callers are not usable here: `/api/admin/dev/create-org` needs `DEV_TENANT_SPINUP_ENABLED`, which must never be set on production (checklist X row); `web/scripts/ensureSharedQaTenant.ts` creates only the frozen QA orgs (and refuses the production ref it knows); `npm run dev:tenant:childcare` also seeds demo opportunities, which D7 forbids | D11. Step 16 has no approved command without it | P4 F6; the files named | The exact step-16 invocation (a direct call of `createOrgAndAssignAdmin` from `web/`, with the new project's URL and service-role key in the Mac mini session only, never in a file) is written into the step-16 command list and approved by the Development Lead and the Database Engineer at step 6. Developer |
+| **M5** | **The existing org helper has no reviewed production invocation.** D11 uses the existing helper `web/lib/dev/createOrgAndAssignAdmin.ts`; no new helper is written. It inserts one `orgs` row (industry `childcare`, seeded by `20260430211000`), one `admin` membership through `create_membership_with_access_profile`, and the relationship-field configuration (`field_section_definitions`, `option_sets`, `option_set_items`, `field_definitions`); it needs an existing `auth.users` id. Its current callers are not usable here: `/api/admin/dev/create-org` needs `DEV_TENANT_SPINUP_ENABLED`, which must never be set on production (checklist X row); `web/scripts/ensureSharedQaTenant.ts` creates only the frozen QA orgs (and refuses the production ref it knows); `npm run dev:tenant:childcare` also seeds demo opportunities, which D7 forbids | D11. Step 16 has no approved command without it | P4 F6; the files named. **Built by slice B3:** `npm run tenant:create` (`web/scripts/tenantCreate.ts`) calls the existing helper, unchanged, with explicit arguments and an org id it chooses before writing. It refuses an inexplicit target, staging and the previous production project, a duplicate slug or name, an admin id that is not an Auth user or whose email differs, and an unnamed admin. It prints the planned writes, asks for the slug to be typed, and logs every line. Rehearsed locally on a project built from the chain (§5.6.1; [`environments-b3-tenant-evidence-2026-11-25/`](environments-b3-tenant-evidence-2026-11-25/)) | The exact step-16 invocation (a direct call of `createOrgAndAssignAdmin` from `web/`, with the new project's URL and service-role key in the Mac mini session only, never in a file) is written into the step-16 command list and approved by the Development Lead and the Database Engineer at step 6. Developer |
 | **M6** | **No green CI run on the rebuilt candidate.** P6 step 2 requires each `required_checks` entry to succeed on the candidate SHA; the check names still need confirming against real check-runs (P6 owner action 4) | Staging verification cannot pass without it | P4 *Integration through a pull request*; P6 owner action 4 | Step 4. Developer; the push and PR are authorized actions |
 | **M7** | **No read-only role on any project; the new project's backup/PITR tier is not chosen** (P6 owner actions 5–6) | Observations need a read path that cannot write; after step 16, backups are the new project's only recovery | P6 owner actions 5–6 | Step 5. Owner in Supabase |
-| **M8** | **The configuration-only allowlist export and its import do not exist.** P3 R1 requires re-authoring through the app's write paths from a reviewed configuration-only listing, never a row dump; the repo's only Firefly configuration capture is defective (P3 C14); several Firefly configuration counts were never observed on hosted staging (P3 C2, C13, C14, C16: BLOCKED on STG-CENSUS) | D7, D11. Step 16 has nothing reviewed to import | P3 §C, R1 | The export and the import procedure exist and are approved by the Development Lead and the Database Engineer (step 6) |
+| **M8** | **The configuration-only allowlist export and its import do not exist.** P3 R1 requires re-authoring through the app's write paths from a reviewed configuration-only listing, never a row dump; the repo's only Firefly configuration capture is defective (P3 C14); several Firefly configuration counts were never observed on hosted staging (P3 C2, C13, C14, C16: BLOCKED on STG-CENSUS) | D7, D11. Step 16 has nothing reviewed to import | P3 §C, R1. **Built by slice B3:** `tenant:config:export` (read-only; the allowlist `web/lib/tenancy/configTransfer/allowlist.ts`: sites, rooms, household role types, the `lead_management` Enrollment process; every other kind refused by name), `tenant:config:import plan\|apply\|verify` (re-authors through the app's write paths; idempotent; dry run), `tenant:rollback-sql` (§7). The July 2026 capture is retired as a source (`docs/sprints/active/assets/firefly-config/README.md`). Rehearsed locally from the E2 seed: §5.6 checks 9/9 PASS, re-run a no-op, the step-16 removal proven against the step-9 census (§5.6.1; [`environments-b3-tenant-evidence-2026-11-25/`](environments-b3-tenant-evidence-2026-11-25/)). **Open:** lane work units cannot be derived without C14's status definitions (§5.6.1 16.4) | The export and the import procedure exist and are approved by the Development Lead and the Database Engineer (step 6) |
 | **M9** | **The candidate fails `release identify` as committed** (§2) | P6 step 1 is a hard gate | `identify-p4-candidate-no-allowance.json` (exit 1). Cause: `.github/workflows/vacilando-tier2.yml` only (§2), fixed on this branch by B1 (`e53a318cb`). **B2 measured it:** a simulated step-1 merge of this branch into `origin/staging`, then P4's `build-candidate.sh`, gives a candidate that `identify` passes with no allowance (exit 0, `tree_diff_from_staging: []`, fast-forward; B2 `identify-no-allowance.json`, re-measured on `5ea249e5b`). No code or config change is needed: steps 1–2 must only merge this branch into `staging` (so `vacilando-tier2.yml` equals `main`'s) and rebuild the candidate from that merge, and step 2 must not add an allowance | Step 2: `identify` exits 0 **with no `--allow-tree-diff`** |
 | **C-…** | Dashboard-only reads: C-FLAG-1, C-CLOCK-1, C-MSG-1, C-O-1, C-RB-1/2/3, C-REN-1/2 (§6) | Each is an input a step needs | Not readable from the repository | Steps 6–7. Owner |
 
@@ -419,6 +419,172 @@ The class **O** business settings (`ALLOY_CANCELLATION_FEE_CENTS`, `ALLOY_CANCEL
 Nothing else is in this step. Provider bindings, merchants, Auth mail, further users and invites are tenant setup that
 follows it.
 
+### 5.6.1 The step-16 command list (M5, M8): exact commands, expected output, stop conditions
+
+Built and rehearsed locally by slice B3
+([`environments-b3-tenant-evidence-2026-11-25/`](environments-b3-tenant-evidence-2026-11-25/)): the same commands, with
+`--target local` and a loopback URL in place of `--target production` and the new project. The commands are
+`web/scripts/tenantCreate.ts` (M5: calls the existing `web/lib/dev/createOrgAndAssignAdmin.ts`, unchanged, and nothing
+else under `lib/dev`), `web/scripts/tenantConfigExport.ts` and `web/scripts/tenantConfigImport.ts` (M8; the allowlist is
+`web/lib/tenancy/configTransfer/allowlist.ts`), and `web/scripts/tenantRollbackSql.ts` (§7).
+
+**Placeholders.** The operator types these in the session; none is in a file. `<new-ref>`: the new project's ref.
+`<release-dir>`: step 5's `$DIR`. `<admin-user-id>`, `<admin-email>`, `<admin-full-name>`: the account the owner
+names at step 6 (owner question Q1: whose account is Firefly's first admin). `<export-sha256>`: the reviewed file's hash
+the reviewers approved at step 6. `<ORG_ID>`: what step 16.3 prints. The service-role key is read with `read -rs`, never
+echoed, never in argv.
+
+**Every command refuses** (exit 3 or 4, nothing written) when: the target is not explicit; the URL names staging
+(`ikaxilmwmrmbagoidedu`) or the previous production project (`vslwnntzzgpnmrpjipat`); `--project-ref` is not the URL's
+ref; `ALLOY_ENVIRONMENT` is not `production`; the key's own project is another ref; or the shell already sets
+`SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL` or `SUPABASE_SERVICE_ROLE_KEY` (start a clean shell). **Every command logs**
+each printed line, timestamped, to its `--log` file in the release directory (filed at step 17).
+
+**Step 6, before the window: the export, from staging, read-only.** The operator runs it from `web/` with staging's
+read-only role:
+
+```bash
+cd web
+read -rs TENANT_CONFIG_EXPORT_DATABASE_URL && export TENANT_CONFIG_EXPORT_DATABASE_URL   # staging's read-only role URL, typed
+ALLOY_ENVIRONMENT=staging npm run -s tenant:config:export -- --target staging --confirm-project-ref ikaxilmwmrmbagoidedu \
+  --org-id 93667019-bd28-49b5-a688-acc9bb1e0a19 --out "../<release-dir>/firefly-config-export.json"
+```
+
+Expected: `items: {"sites":…,"rooms":…,"household_role_types":…,"enrollment_process":1}`, the `left behind` list (label and
+marker only), the metadata keys dropped, `✓ wrote …` and `sha256 …`. The read is one `BEGIN READ ONLY … ROLLBACK`
+statement in a session with `default_transaction_read_only=on`, over five tables only (`orgs`, `locations`,
+`customer_person_role_types`, `departments`, `work_units`). **Stop** on a non-zero exit. The Development Lead and the
+Database Engineer then review the file: every item, every `left behind` row, every dropped key. They may delete items
+(P3 C5: the 17 rooms added after 2026-09-19 are OWNER until the owner keeps or drops them). They approve the file by its
+hash, re-taken after any edit: `shasum -a 256 <release-dir>/firefly-config-export.json`. That hash is
+`<export-sha256>`. The transferable kinds are sites, rooms, household role types and the `lead_management` Enrollment
+process. Every other kind is refused by name with its reason: records, persons, staff, messages, documents, bindings,
+merchants, secrets, and the KEEP-CONFIG items that have no working write path yet or wait on an owner answer (programs,
+catalog rates, charge templates, financial policies, forms, control plane, communication templates; see
+`NOT_TRANSFERRED`).
+
+**Step 16.0: the session.** A new shell on the Mac mini, transcript recording on, from the release candidate's worktree:
+
+```bash
+cd web
+export ALLOY_ENVIRONMENT=production
+read -rs ALLOY_OPERATOR_SERVICE_ROLE_KEY && export ALLOY_OPERATOR_SERVICE_ROLE_KEY   # the NEW project's service-role key
+NEW=<new-ref>; DIR=../<release-dir>; REL="node ../scripts/release/alloy-release.mjs"
+T=(--target production --supabase-url "https://$NEW.supabase.co" --project-ref "$NEW")
+ADM=<admin-user-id>        # 16.1: from the Auth dashboard, after the owner adds the account
+A=(--name "Firefly Early Learning" --slug firefly-early-learning --industry childcare \
+   --admin-user-id "$ADM" --admin-email "<admin-email>" --admin-full-name "<admin-full-name>")
+```
+
+**16.1 (owner, dashboard).** The owner adds the named account in the new project's Authentication → Users ("Add user",
+email confirmed). The operator copies its id into `ADM`. No command.
+
+**16.2: helper, dry run.**
+
+```bash
+npm run -s tenant:create -- "${T[@]}" "${A[@]}" --log "$DIR/step16-tenant-create.log" --dry-run
+```
+
+Expected: `target: production project <new-ref> (https://<new-ref>.supabase.co)`. `orgs now (1):` with exactly the
+line `<id>|retired|_w17_selftest_<hex>`. `admin <admin-user-id> (<admin-email>) holds 0 membership(s) today`. The plan:
+the admin account's name, `insert orgs: id <uuid>, name "Firefly Early Learning", slug firefly-early-learning, status
+active, industry childcare (…)`, one admin membership, the person-child relationship field configuration, `nothing else`.
+Then `dry run: nothing was written`. **Stop** on any `✗ refused (…)`, or if `orgs now` lists anything but the retired
+W-17 org (step 15 said there is no tenant yet). `--admin-full-name` is needed because the database refuses an admin's
+money-capable grants to an unnamed login (`money_capable_grant_requires_named_operator`). If the account already has a
+name, the command uses it and refuses a different `--admin-full-name`.
+
+**16.3: helper.** The same command without `--dry-run`. It prints the plan again and asks the operator to type
+`firefly-early-learning`.
+
+```bash
+npm run -s tenant:create -- "${T[@]}" "${A[@]}" --log "$DIR/step16-tenant-create.log"
+ORG=<the ORG_ID it printed>
+```
+
+Expected: `confirmed: "firefly-early-learning"`, `admin account named "…"`, `created org <ORG_ID> slug
+firefly-early-learning`, `memberships in the new org: <admin-user-id>|admin`, the `ORG_ID` line with that id, `done`. **Stop** on a
+non-zero exit. `helper failed before inserting the org` means nothing is in `orgs`; fix and repeat 16.3.
+`helper failed after inserting org <id>` means go to 16.R. A re-run is refused (`duplicate_slug`, `duplicate_name`).
+
+**16.4: import, dry run.**
+
+```bash
+I=("${T[@]}" --org-id "$ORG" --admin-user-id "$ADM" --file "$DIR/firefly-config-export.json" --expect-sha256 <export-sha256>)
+npm run -s tenant:config:import -- plan "${I[@]}" --log "$DIR/step16-import.log"
+```
+
+Expected: `file: … sha256 <export-sha256>`, `export of "Firefly Early Learning" (staging, …)`, `org: <ORG_ID>|active|Firefly
+Early Learning`. Every plan line is `create`, and the summary reads `<N> to create, 0 to complete, 0 already present,
+0 present but different`, where N is the approved file's item count. `dry run: nothing was written`. **Stop** on
+`refused (file_changed)` (not the approved file), `refused (outside the allowlist or malformed)`, `refused
+(seed_config)`, any `present_differs`, or a `blocked` item. `blocked` means the file names lane work units
+(`derived_work_unit_keys`) that the new org cannot derive. The app's work-unit repair takes a lane's status filters only
+from opportunity status definitions assigned to its stage (P3 C14, not transferred), and a fresh org has none. The
+reviewers settle this at step 6, not in the window: either the reviewed file names no lane work units (the lanes are then
+tenant setup, saved in the Work Unit Queue screen after step 16), or C14's status definitions join the allowlist first.
+
+**16.5: import.** The same with `apply`. It asks the operator to type the org id's first 8 characters.
+
+```bash
+npm run -s tenant:config:import -- apply "${I[@]}" --log "$DIR/step16-import.log"
+```
+
+Expected: `written site:…` / `room:…` / `role_type:…` lines; for the process, `published revision 1 (…)`, `opportunity
+drawer override: provisioned`, `work units: the export names no lane work units; none derived` (or, if the file
+names lanes and the org can derive them, `work units: lifecycle_wu_…`; P3 C2: derived by the app's work-unit repair,
+never copied), `written process:lead_management/enrollment`, then `✓ wrote <N> item(s); run verify next`.
+**Stop** on any `✗`: go to 16.R. (A re-run only creates what is absent; the B3 rehearsal's second apply printed
+`nothing to write: every item is already present (no-op)`.)
+
+**16.6: the §5.6 item-5 checks.** Take the census again with step 9's command, then verify against step 9's baseline:
+
+```bash
+$REL emit-sql census | psql "$PRODUCTION_DB_URL_READONLY" -At -X -f - > "$DIR/after-step16-census-extras.txt"
+npm run -s tenant:config:import -- verify "${I[@]}" --log "$DIR/step16-verify.log" \
+  --baseline "$DIR/census-extras.txt" --after-census "$DIR/after-step16-census-extras.txt" --release-config "$DIR/release-config.json"
+```
+
+Expected, every line `PASS`, ending `✓ all <n> checks passed`:
+
+| Check | Pass |
+|---|---|
+| `config_present` | `<N> item(s) present and equal` (re-planning the file finds every item present and equal) |
+| `work_units:lead_management` | every lane work unit the export names is active |
+| `baseline_counts` | every record, transaction and binding table, and every other step-9 table outside the import's write set, at its step-9 count |
+| `import_write_set` | (listing) the write-set tables that grew. Rehearsed: 20 tables: `orgs` +1, `user_roles` +1, `user_access_profiles` +1, `role_definitions` +4, `role_permission_grants` +160, the org's database defaults (`document_categories` +10, `document_types` +13, `document_type_versions` +13), the relationship fields (`field_section_definitions` 1, `option_sets` 1, `option_set_items` 10, `field_definitions` 9), `locations`, `customer_person_role_types`, `departments` 1, `business_process_drafts` 1, `business_process_revisions` 1, `configuration_publications` 1, `workflow_events` 1, `record_drawer_layouts` 1, plus `work_units` when lanes are derived |
+| `census_write_set` | every table whose count moved since step 9 is in the write set (this also sees tables empty at step 9) |
+| `orgs` | exactly `<ORG_ID>\|active\|Firefly Early Learning` and `<id>\|retired\|_w17_selftest_<hex>`; no ZZ Alloy QA or retired staging org |
+| `no_seed_ids` | no `f17e0000-…` id in any written table |
+| `memberships` | exactly `<admin-user-id>\|admin` |
+| `auth_users` | `1 user(s): <admin-user-id>` |
+
+Then the release tool's own org read, for the transcript:
+`$REL emit-sql orgs | psql "$PRODUCTION_DB_URL_READONLY" -At -X -f - > "$DIR/after-step16-orgs.txt"` lists the same
+two orgs. **Stop** on any `FAIL`: step 16 fails, go to 16.R.
+
+**16.R: if step 16 fails its checks (§7).** Remove what it wrote, in one transaction, as `postgres` (step 9's
+connection):
+
+```bash
+npm run -s tenant:rollback-sql | psql "$PRODUCTION_DB_URL" -X -v org_id="$ORG" -v org_name='Firefly Early Learning' -f - \
+  > "$DIR/step16-rollback.txt" 2>&1; echo "rollback rc=$?"
+$REL emit-sql census | psql "$PRODUCTION_DB_URL_READONLY" -At -X -f - > "$DIR/after-rollback-census-extras.txt"
+diff "$DIR/census-extras.txt" "$DIR/after-rollback-census-extras.txt" && echo "census equals step 9"
+$REL emit-sql orgs | psql "$PRODUCTION_DB_URL_READONLY" -At -X -f - | diff "$DIR/census-orgs.txt" - && echo "orgs equal step 9"
+```
+
+Expected: `rollback rc=0`, a `removed org <ORG_ID> ("Firefly Early Learning") from <k> table(s) …; <t> trigger(s)
+restored` notice, then both `equals step 9` lines. The SQL refuses before any change if the org is missing, not named as
+given, not `active`, or is the W-17 org. It also refuses once any record or transaction table holds a row for the org
+(`window_closed`: the rollback window has closed, §7). It lifts only the enabled user triggers of the tables holding the
+org's rows (the guards that refuse deleting a used document category, an immutable revision or publication, a
+membership's profile), restores exactly those, keeps foreign keys enforced, and checks that no row is left before it
+commits. Any error leaves the transaction aborted and nothing removed. The Auth user is kept: step 16 can be repeated
+from 16.2 in this window if the cause is fixed and time allows (B3 rehearsed this), or the owner deletes the account in
+the dashboard. **Stop, and take the other §7 branch** (recreate the project, repeat from step 9 in a later window) if
+`rollback rc` is not 0 or either `diff` prints a line.
+
 ## 6. Checklist issues carried forward
 
 Label: **OWNER CHECK** (the owner verifies or sets it, with a pass condition), **SETTLED** (D1–D11 settle it), **N/A** (does
@@ -474,8 +640,9 @@ needs no restoring because D2 leaves it unchanged. Rollback **points production 
 **Hold, do not roll back**, when step 9 fails (§4 item 7). Nothing user-facing has changed.
 
 **If step 16 fails its checks.** Production is already verified. Stop. Either remove what step 16 wrote (the export names
-every row; the helper wrote one org, one membership and the relationship-field configuration; Auth holds one user), or, if
-that cannot be shown complete, recreate the new project and repeat from step 9 in a later window booked as in step 6b.
+every row; the helper wrote one org, one membership and the relationship-field configuration; Auth holds one user) with §5.6.1 16.R, which is complete only when
+the census and the org list equal step 9's, or, if that cannot be shown complete, recreate the new project and repeat
+from step 9 in a later window booked as in step 6b.
 Rolling back to the old project is not needed for a step-16 failure.
 
 **When the rollback window closes.** Rolling back after step 16 discards only Firefly's configuration, which the reviewed
@@ -573,5 +740,5 @@ presence, in plan order:
 - No push, PR, merge, deploy or fetch, and no hosted service of any kind. The rebuilt candidate does not exist yet.
 - As first written, no migration was written (M2), and no change was made to the app, the release tool,
   `release-config.json` or any workflow file (M3, M4, M9). Slice B1 later added the W-17 migration (M2) and main's
-  `vacilando-tier2.yml` (§2) on this branch. Slice B2 then added the release tool's first-promotion mode and the config-copy generator (M3, M4; `f60f1ae66`) and measured M9 offline (§2); the committed `release-config.json` keeps its production ref; B2's one change to it is the reviewed retired-org list (§9, `5ea249e5b`). The helper invocation and the export (M5, M8) were not written, and the helper was not run.
+  `vacilando-tier2.yml` (§2) on this branch. Slice B2 then added the release tool's first-promotion mode and the config-copy generator (M3, M4; `f60f1ae66`) and measured M9 offline (§2); the committed `release-config.json` keeps its production ref; B2's one change to it is the reviewed retired-org list (§9, `5ea249e5b`). The helper invocation and the export (M5, M8) were not written, and the helper was not run. Slice B3 then wrote them, with the step-16 removal, and rehearsed them locally only (§5.6.1, [`environments-b3-tenant-evidence-2026-11-25/`](environments-b3-tenant-evidence-2026-11-25/)); nothing was run against staging or production, and the real staging export is the operator's, at step 6.
 - It fixes no calendar date. The window is booked at step 6b (D8).

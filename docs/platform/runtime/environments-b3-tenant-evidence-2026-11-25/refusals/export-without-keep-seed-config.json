@@ -1,0 +1,262 @@
+{
+  "format": "alloy.tenant-config-export.v1",
+  "source": {
+    "environment": "local",
+    "host": "127.0.0.1",
+    "project_ref": null,
+    "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+    "org_name": "Firefly Early Learning",
+    "exported_at": "2026-11-26T06:31:12.431Z",
+    "seed_config_kept": false
+  },
+  "kinds": {
+    "sites": [],
+    "rooms": [],
+    "household_role_types": [],
+    "enrollment_process": []
+  },
+  "left_behind": [
+    {
+      "kind": "sites",
+      "label": "North Campus",
+      "reason": "metadata.seed"
+    },
+    {
+      "kind": "sites",
+      "label": "South Campus",
+      "reason": "metadata.seed"
+    },
+    {
+      "kind": "sites",
+      "label": "West Campus",
+      "reason": "metadata.seed"
+    },
+    {
+      "kind": "rooms",
+      "label": "Bears",
+      "reason": "metadata.seed"
+    },
+    {
+      "kind": "rooms",
+      "label": "Giraffe",
+      "reason": "metadata.seed"
+    },
+    {
+      "kind": "rooms",
+      "label": "Infant A",
+      "reason": "metadata.seed"
+    },
+    {
+      "kind": "rooms",
+      "label": "Infant A",
+      "reason": "metadata.seed"
+    },
+    {
+      "kind": "rooms",
+      "label": "Infant B",
+      "reason": "metadata.seed"
+    },
+    {
+      "kind": "rooms",
+      "label": "Infant B",
+      "reason": "metadata.seed"
+    },
+    {
+      "kind": "rooms",
+      "label": "Monkeys",
+      "reason": "metadata.seed"
+    },
+    {
+      "kind": "rooms",
+      "label": "Pre-K",
+      "reason": "metadata.seed"
+    },
+    {
+      "kind": "rooms",
+      "label": "Preschool",
+      "reason": "metadata.seed"
+    },
+    {
+      "kind": "rooms",
+      "label": "Preschool 1",
+      "reason": "metadata.seed"
+    },
+    {
+      "kind": "rooms",
+      "label": "Preschool 2",
+      "reason": "metadata.seed"
+    },
+    {
+      "kind": "rooms",
+      "label": "Tigers",
+      "reason": "metadata.seed"
+    },
+    {
+      "kind": "rooms",
+      "label": "Toddler 1",
+      "reason": "metadata.seed"
+    },
+    {
+      "kind": "rooms",
+      "label": "Toddler 1",
+      "reason": "metadata.seed"
+    },
+    {
+      "kind": "rooms",
+      "label": "Toddler 2",
+      "reason": "metadata.seed"
+    },
+    {
+      "kind": "rooms",
+      "label": "Toddler 2",
+      "reason": "metadata.seed"
+    },
+    {
+      "kind": "rooms",
+      "label": "Zebras",
+      "reason": "metadata.seed"
+    },
+    {
+      "kind": "household_role_types",
+      "label": "child",
+      "reason": "metadata.seed"
+    },
+    {
+      "kind": "household_role_types",
+      "label": "parent",
+      "reason": "metadata.seed"
+    },
+    {
+      "kind": "household_role_types",
+      "label": "guardian",
+      "reason": "metadata.seed"
+    },
+    {
+      "kind": "household_role_types",
+      "label": "emergency_contact",
+      "reason": "metadata.seed"
+    },
+    {
+      "kind": "household_role_types",
+      "label": "authorized_pickup",
+      "reason": "metadata.seed"
+    },
+    {
+      "kind": "household_role_types",
+      "label": "payer",
+      "reason": "metadata.seed"
+    },
+    {
+      "kind": "enrollment_process",
+      "label": "lead_management",
+      "reason": "seed id namespace"
+    }
+  ],
+  "dropped_metadata_keys": [],
+  "table_classes": {
+    "import_writes": [
+      "orgs",
+      "user_roles",
+      "user_access_profiles",
+      "role_definitions",
+      "role_permission_grants",
+      "field_section_definitions",
+      "option_sets",
+      "option_set_items",
+      "field_definitions",
+      "document_categories",
+      "document_types",
+      "document_type_versions",
+      "locations",
+      "customer_person_role_types",
+      "departments",
+      "business_process_drafts",
+      "business_process_revisions",
+      "configuration_publications",
+      "workflow_events",
+      "record_drawer_layouts",
+      "work_units"
+    ],
+    "record_or_transaction": [
+      "customers",
+      "customer_members",
+      "customer_persons",
+      "customer_member_contacts",
+      "customer_member_contact_roles",
+      "customer_subscriptions",
+      "customer_tags",
+      "persons",
+      "person_locations",
+      "person_relationships",
+      "person_child_relationships",
+      "person_child_relationship_roles",
+      "person_health_facts",
+      "person_medical_consents",
+      "person_kiosk_codes",
+      "user_person_links",
+      "opportunities",
+      "opportunity_persons",
+      "opportunity_customer_members",
+      "opportunity_tags",
+      "process_instances",
+      "operational_tasks",
+      "tour_bookings",
+      "child_placements",
+      "child_enrollment_agreements",
+      "child_attendance_events",
+      "child_safeguarding_restrictions",
+      "child_safeguarding_screenings",
+      "enrollment_pricing_terms",
+      "enrollment_requirement_exceptions",
+      "employments",
+      "employment_positions",
+      "employment_compensation_terms",
+      "staff_qualifications",
+      "staff_qualification_evidence",
+      "staff_presence_events",
+      "staff_availability_windows",
+      "staff_availability_exceptions",
+      "staff_coverage_allocations",
+      "charges",
+      "charge_line_items",
+      "payments",
+      "payment_allocations",
+      "payment_methods",
+      "payment_instruments",
+      "payment_autopay_arrangements",
+      "payment_collection_attempts",
+      "payment_holds",
+      "payment_provider_events",
+      "payment_provider_refunds",
+      "payment_provider_disputes",
+      "ledger_transactions",
+      "documents",
+      "document_versions",
+      "document_field_values",
+      "form_submissions",
+      "form_submission_documents",
+      "form_submission_signatures",
+      "communication_threads",
+      "communication_messages",
+      "communication_message_recipients",
+      "communication_message_reads",
+      "communication_scheduled_sends",
+      "communication_delivery_events",
+      "communication_inbound_ingress",
+      "messages",
+      "messages_outbox",
+      "consumption_events"
+    ],
+    "never_transferred_bindings": [
+      "communication_provider_accounts",
+      "communication_provider_bindings",
+      "communication_identities",
+      "communication_identity_grants",
+      "communication_identity_location_bindings",
+      "communication_ingress_routes",
+      "payment_provider_merchants",
+      "organization_provider_credential_events",
+      "tour_public_booking_links"
+    ]
+  }
+}

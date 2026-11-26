@@ -1,0 +1,4 @@
+started: tenant:config:import plan plan --target local --supabase-url http://127.0.0.1:50513 --org-id 5ad76c7c-fd07-40c1-9c01-bc28f7a9ece8 --admin-user-id b7bec213-bfd0-429f-ae76-a476ea380bde --log /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/step16-import.log --file /tmp/alloy-b3/with-bindings.json --expect-sha256 b892d704e0f8f8f17e473a2892a696730f593ba2efed6b5265078ff2100b5751
+file: /tmp/alloy-b3/with-bindings.json  sha256 b892d704e0f8f8f17e473a2892a696730f593ba2efed6b5265078ff2100b5751
+✗ refused (outside the allowlist or malformed):
+  - kinds.provider_bindings: refused — environment credentials: re-provisioned per environment, never transferred (P3 C15, B4; I-7)
