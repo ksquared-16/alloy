@@ -1,4 +1,4 @@
-# Test runs on commit f60f1ae66684 (2026-11-26T05:32:58Z); exit codes read directly, not through a pipe
+# Test runs on commit 5ea249e5bacc (2026-11-26T05:45:56Z); exit codes read directly, not through a pipe
 
 ### npm run test:release-procedure
 ok 1 - procedure order: approval precedes every production step; contract follows the deploy
@@ -18,33 +18,37 @@ ok 14 - plan: blockers — orphan, out of order, renumbered duplicate, changed i
 ok 15 - apply wrapper records the ledger row in the same text it runs
 ok 16 - staging tenancy: Firefly + ZZ Alloy QA passes; a retired self-test org is a warning only
 ok 17 - staging tenancy: another school, or no Firefly, fails
-ok 18 - production isolation: QA orgs, staging-seed namespace and live self-test orgs fail; real schools pass
-ok 19 - staging.verify: identity, CI on the candidate SHA, ledger equality, tenancy
-ok 20 - production.verify: identity, ledger, fingerprint, RLS
-ok 21 - approval: a valid owner approval binds candidate, manifest and staging verification
-ok 22 - approval: every way it can be wrong is refused
-ok 23 - approval: a production approval cannot be recorded from an agent session or without a terminal
-ok 24 - audit: chain verifies, and any edit, deletion or reorder is detected
-ok 25 - rehearsal fence: real project refs and non-loopback hosts are refused
-ok 26 - identify: routine candidate fast-forwards; a diverged main, an extra tree path or a migration edit is refused
-ok 27 - runbook: names the manifest hash, the approval, and every production step in order
-ok 28 - live evidence path through the CLI: prepare → runbook → record (gated) → check-production
-ok 29 - first promotion: an empty ledger plans the whole chain in version order; the contract_not_last waiver is the only one
-ok 30 - first promotion: a target that records any version is refused outright
-ok 31 - first promotion: the other planner blockers still apply (renumbered duplicate needs a ledger, so: none can fire on empty), routine plans are byte-identical without the flag
-ok 32 - first-promotion config copy: names the new ref, records the previous one, leaves the policy alone
-ok 33 - first promotion preflight: production still serves old main on the PREVIOUS project; the new project is empty
-ok 34 - first-promotion manifest: carries the mode and both refs; the approval must grant schema_contract for the chain's destructive files
-ok 35 - first-promotion manifest: a config naming any other project cannot check or record it
-ok 36 - first promotion verification: no tenant before step 16, only the retired self-test org; census needs the extensions and the bucket
-ok 37 - first-promotion runbook: config copy on every command, a target guard on every write, the whole chain, census before deploy
-ok 38 - ledger-if-present: psql meta-commands only; reads the ledger only when the table exists
-ok 39 - first promotion through the CLI: config copy → prepare --first-promotion → runbook → check-ledger → record → check-production; refusals
-ok 40 - emit-apply through a pipe delivers the whole file (a large migration is not cut at 64 KiB)
-# tests 40
-# pass 40
+ok 18 - staging tenancy: the reviewed retired org Alloy Bend passes only while retired
+ok 19 - staging tenancy: a retired org not on the reviewed list fails; an active unknown org still fails
+ok 20 - staging tenancy: a reviewed-list entry that does not say retired is refused, and its org is not accepted
+ok 21 - production: staging's reviewed retired org must be absent; W-17 retired + Firefly is the expected end state
+ok 22 - production isolation: QA orgs, staging-seed namespace and live self-test orgs fail; real schools pass
+ok 23 - staging.verify: identity, CI on the candidate SHA, ledger equality, tenancy
+ok 24 - production.verify: identity, ledger, fingerprint, RLS
+ok 25 - approval: a valid owner approval binds candidate, manifest and staging verification
+ok 26 - approval: every way it can be wrong is refused
+ok 27 - approval: a production approval cannot be recorded from an agent session or without a terminal
+ok 28 - audit: chain verifies, and any edit, deletion or reorder is detected
+ok 29 - rehearsal fence: real project refs and non-loopback hosts are refused
+ok 30 - identify: routine candidate fast-forwards; a diverged main, an extra tree path or a migration edit is refused
+ok 31 - runbook: names the manifest hash, the approval, and every production step in order
+ok 32 - live evidence path through the CLI: prepare → runbook → record (gated) → check-production
+ok 33 - first promotion: an empty ledger plans the whole chain in version order; the contract_not_last waiver is the only one
+ok 34 - first promotion: a target that records any version is refused outright
+ok 35 - first promotion: the other planner blockers still apply (renumbered duplicate needs a ledger, so: none can fire on empty), routine plans are byte-identical without the flag
+ok 36 - first-promotion config copy: names the new ref, records the previous one, leaves the policy alone
+ok 37 - first promotion preflight: production still serves old main on the PREVIOUS project; the new project is empty
+ok 38 - first-promotion manifest: carries the mode and both refs; the approval must grant schema_contract for the chain's destructive files
+ok 39 - first-promotion manifest: a config naming any other project cannot check or record it
+ok 40 - first promotion verification: no tenant before step 16, only the retired self-test org; census needs the extensions and the bucket
+ok 41 - first-promotion runbook: config copy on every command, a target guard on every write, the whole chain, census before deploy
+ok 42 - ledger-if-present: psql meta-commands only; reads the ledger only when the table exists
+ok 43 - first promotion through the CLI: config copy → prepare --first-promotion → runbook → check-ledger → record → check-production; refusals
+ok 44 - emit-apply through a pipe delivers the whole file (a large migration is not cut at 64 KiB)
+# tests 44
+# pass 44
 # fail 0
-exit=0
+exit 0
 
 ### npm run test:settings-checklist
 ok 1 - every key the code reads is in the checklist or named as not a setting
@@ -56,7 +60,7 @@ ok 6 - scanner: each detection rule, on a fixture tree
 # tests 6
 # pass 6
 # fail 0
-exit=0
+exit 0
 
 ### npm run test:release-rehearsal
 ok 1 - routine release: every control passes in order, production ends identical to staging
@@ -88,4 +92,4 @@ ok 26 - the rehearsal database is a labelled, network-less throwaway
 # tests 26
 # pass 26
 # fail 0
-exit=0
+exit 0

@@ -1,6 +1,6 @@
 {
   "ok": true,
-  "manifest_sha256": "425b6c53bd4a2eaccf3f143dfb6d3edab21279850a5d2aa638ad42a3b3c94d54",
+  "manifest_sha256": "a3181dc2179f27edfac329b92d73593ffd17e331ec753cf26556796291e355f1",
   "mode": "first_promotion",
   "new_supabase_project_ref": "rehearsalnewprojectr",
   "chain": 558,

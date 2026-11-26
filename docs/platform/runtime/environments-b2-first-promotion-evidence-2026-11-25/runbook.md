@@ -1,7 +1,7 @@
-# First-promotion runbook — ecc1d912ca2f → rehearsal on the new project `rehearsalnewprojectr`
+# First-promotion runbook — 5132907da207 → rehearsal on the new project `rehearsalnewprojectr`
 
-Manifest sha256: `425b6c53bd4a2eaccf3f143dfb6d3edab21279850a5d2aa638ad42a3b3c94d54` (confirm code `425b6c53bd4a`)
-Replaces main `bbfbec76d7795cc3392b0c61e1c8ce829adaf9d2` on `vslwnntzzgpnmrpjipat`, which is **not touched** and is the rollback target. 7828 commit(s).
+Manifest sha256: `a3181dc2179f27edfac329b92d73593ffd17e331ec753cf26556796291e355f1` (confirm code `a3181dc2179f`)
+Replaces main `bbfbec76d7795cc3392b0c61e1c8ce829adaf9d2` on `vslwnntzzgpnmrpjipat`, which is **not touched** and is the rollback target. 7830 commit(s).
 The whole chain: 558 migration(s), `20260328120000` … `20261223090000`, in version order, 45 of them destructive by classification (they run on a project that serves nothing).
 
 Every command is the owner's (or the operator session's with the owner present). `$PRODUCTION_DB_URL` is the **new** project as `postgres`, on port **5432** (direct connection or session pooler, never the transaction pooler 6543); `$PRODUCTION_DB_URL_READONLY` is its read-only role. The release tool never sees either. Every write first runs this guard:
@@ -14,7 +14,7 @@ fp_target "$PRODUCTION_DB_URL" && fp_target "$PRODUCTION_DB_URL_READONLY"
 ## 4. owner.approval
 
 ```bash
-node scripts/release/alloy-release.mjs approve --config <release-dir>/release-config.json --manifest <release-dir>/manifest.json --approver <owner> --confirm 425b6c53bd4a --ttl-hours 4
+node scripts/release/alloy-release.mjs approve --config <release-dir>/release-config.json --manifest <release-dir>/manifest.json --approver <owner> --confirm a3181dc2179f --ttl-hours 4
 node scripts/release/alloy-release.mjs record --config <release-dir>/release-config.json --audit <release-dir>/audit.jsonl --manifest <release-dir>/manifest.json --approval <release-dir>/approval.json --step owner.approval --status pass --detail '{}'
 ```
 
@@ -66,8 +66,8 @@ Only after the platform settings name the new project (briefing step 10; `NEXT_P
 
 ```bash
 test "$(git ls-remote origin refs/heads/main | cut -f1)" = "bbfbec76d7795cc3392b0c61e1c8ce829adaf9d2"   # main is still what was approved
-git push origin ecc1d912ca2f3753c965ffb2888681cd944fcfa5:refs/heads/main   # fast-forward only; never --force
-until b=$(curl -fsS https://www.workwithalloy.com/api/build-info) && echo "$b" | grep -q '"gitSha":"ecc1d912ca2f3753c965ffb2888681cd944fcfa5"' && echo "$b" | grep -q '"supabaseProjectRef":"rehearsalnewprojectr"'; do sleep 30; done
+git push origin 5132907da207fca17821d65c5198a8fe71b341b3:refs/heads/main   # fast-forward only; never --force
+until b=$(curl -fsS https://www.workwithalloy.com/api/build-info) && echo "$b" | grep -q '"gitSha":"5132907da207fca17821d65c5198a8fe71b341b3"' && echo "$b" | grep -q '"supabaseProjectRef":"rehearsalnewprojectr"'; do sleep 30; done
 node scripts/release/alloy-release.mjs record --config <release-dir>/release-config.json --audit <release-dir>/audit.jsonl --manifest <release-dir>/manifest.json --approval <release-dir>/approval.json --step code.deploy --status pass --detail '{}'
 ```
 

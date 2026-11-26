@@ -1,14 +1,14 @@
 {
   "schema": "alloy.release-manifest/v1",
   "environment": "rehearsal",
-  "created_at": "2026-11-26T05:31:04.294Z",
+  "created_at": "2026-11-26T05:43:30.313Z",
   "candidate": {
-    "sha": "ecc1d912ca2f3753c965ffb2888681cd944fcfa5",
-    "tree": "853fbcee3fd021b2b6cecafb2b5d06e2e6bb885d",
-    "staging_sha": "853e80b82dbc3e41a77ae7731ecae445ea3e9b77",
+    "sha": "5132907da207fca17821d65c5198a8fe71b341b3",
+    "tree": "303080a80b0bfe4fc8c50b9d3772683c1a5bc28a",
+    "staging_sha": "c20315e8023b9f09e7609b2baf6f9d04739f757e",
     "production_before_sha": "bbfbec76d7795cc3392b0c61e1c8ce829adaf9d2",
     "fast_forward": true,
-    "commits_ahead_of_main": 7828,
+    "commits_ahead_of_main": 7830,
     "tree_diff_from_staging": []
   },
   "migrations": {
@@ -5918,13 +5918,13 @@
       "20261205090000"
     ]
   },
-  "staging_verification_sha256": "bdbbe8f8ccd5385494535e8cccad4ed4be3f686ff0fc6baa13c23453a02adb3b",
-  "staging_verified_at": "2026-11-26T05:30:55.259Z",
+  "staging_verification_sha256": "b0602a0429a19bd74ad625edc3962371c9f5e75a5866bdca2fd315ccf16235c0",
+  "staging_verified_at": "2026-11-26T05:43:17.561Z",
   "mode": "first_promotion",
   "first_promotion": {
     "new_supabase_project_ref": "rehearsalnewprojectr",
     "previous_supabase_project_ref": "vslwnntzzgpnmrpjipat",
-    "config_sha256": "7d93823c81bb22850405143967056e924058f90af6ff29e9c97b1bb9766feb91"
+    "config_sha256": "b073ebe5e8b303bdce4519ef29dd6a8c559c8ce1c0f49803da808fc2bf4ba57d"
   },
   "production_ledger_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
   "expected_fingerprint": {

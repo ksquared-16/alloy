@@ -42,7 +42,16 @@
       }
     ],
     "staging_seed_id_prefix": "f17e0000-0000-4000-8000-",
-    "selftest_org_name_prefix": "_w17_selftest_"
+    "selftest_org_name_prefix": "_w17_selftest_",
+    "staging_retired_orgs": [
+      {
+        "id": "7803388d-cdee-4afb-89cf-23a137f39423",
+        "slug": "alloy-bend",
+        "name": "Alloy Bend",
+        "status": "retired",
+        "basis": "P3 LEAVE L7; ALY-14 first-promotion briefing §9 (B2). Staging only: never migrated to production."
+      }
+    ]
   },
-  "derived_from_sha256": "3ba261b86e8e72b543086846b0cf83b026a595033bc2812627f395d7949e4662"
+  "derived_from_sha256": "107a8c0c173cef77c930c617cfccdc21fad485b10595ebb5235c7253111d0de9"
 }

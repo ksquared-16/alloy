@@ -5,10 +5,10 @@
     "name": "Kelly",
     "role": "owner"
   },
-  "candidate_sha": "ecc1d912ca2f3753c965ffb2888681cd944fcfa5",
+  "candidate_sha": "5132907da207fca17821d65c5198a8fe71b341b3",
   "production_before_sha": "bbfbec76d7795cc3392b0c61e1c8ce829adaf9d2",
-  "manifest_sha256": "425b6c53bd4a2eaccf3f143dfb6d3edab21279850a5d2aa638ad42a3b3c94d54",
-  "staging_verification_sha256": "bdbbe8f8ccd5385494535e8cccad4ed4be3f686ff0fc6baa13c23453a02adb3b",
+  "manifest_sha256": "a3181dc2179f27edfac329b92d73593ffd17e331ec753cf26556796291e355f1",
+  "staging_verification_sha256": "b0602a0429a19bd74ad625edc3962371c9f5e75a5866bdca2fd315ccf16235c0",
   "pending_migrations": [
     "20260328120000",
     "20260329165048",
@@ -576,7 +576,7 @@
     "code_rollback",
     "schema_contract"
   ],
-  "approved_at": "2026-11-26T05:31:04.501Z",
-  "expires_at": "2026-11-26T09:31:04.501Z",
-  "statement": "I approve the first promotion of ecc1d912ca2f3753c965ffb2888681cd944fcfa5 to rehearsal on the new project rehearsalnewprojectr, replacing bbfbec76d7795cc3392b0c61e1c8ce829adaf9d2 on vslwnntzzgpnmrpjipat (left untouched), with the full chain of 558 migration(s) applied in version order."
+  "approved_at": "2026-11-26T05:43:30.546Z",
+  "expires_at": "2026-11-26T09:43:30.546Z",
+  "statement": "I approve the first promotion of 5132907da207fca17821d65c5198a8fe71b341b3 to rehearsal on the new project rehearsalnewprojectr, replacing bbfbec76d7795cc3392b0c61e1c8ce829adaf9d2 on vslwnntzzgpnmrpjipat (left untouched), with the full chain of 558 migration(s) applied in version order."
 }

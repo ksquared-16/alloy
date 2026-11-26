@@ -1,4 +1,4 @@
-branch=f60f1ae66684a2f203bd02703b9a5635fe91e227 origin/staging=8321949771f7fb6b2f04de6feb1fdd6ccb8e1484 origin/main=bbfbec76d7795cc3392b0c61e1c8ce829adaf9d2 simulated_staging=853e80b82dbc3e41a77ae7731ecae445ea3e9b77 candidate=ecc1d912ca2f3753c965ffb2888681cd944fcfa5
+branch=5ea249e5bacc88890aa4dc9538a50c34d9209dd3 origin/staging=8321949771f7fb6b2f04de6feb1fdd6ccb8e1484 origin/main=bbfbec76d7795cc3392b0c61e1c8ce829adaf9d2 simulated_staging=c20315e8023b9f09e7609b2baf6f9d04739f757e candidate=5132907da207fca17821d65c5198a8fe71b341b3
 ## identify without --allow-tree-diff (M9)
 identify_rc=0
 candidate_files=558 head=20261223090000_w17_selftest_org_retirement.sql
@@ -14,7 +14,7 @@ new project ledger rows before: 0
 {
   "ok": true,
   "out": "/Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b2-first-promotion-evidence-2026-11-25/release/release-config.json",
-  "config_sha256": "7d93823c81bb22850405143967056e924058f90af6ff29e9c97b1bb9766feb91",
+  "config_sha256": "b073ebe5e8b303bdce4519ef29dd6a8c559c8ce1c0f49803da808fc2bf4ba57d",
   "production": {
     "branch": "main",
     "vercel_env": "production",
@@ -30,6 +30,7 @@ plan --first-promotion rc=0 (expected 0)
 plan --first-promotion over a non-empty ledger rc=1 (expected 1)
 prepare --first-promotion with the committed config rc=1 (expected 1)
 prepare --first-promotion over a non-empty ledger rc=1 (expected 1)
+prepare --first-promotion with Alloy Bend active on staging rc=1 (expected 1)
 ## prepare (first-promotion mode)
 prepare_rc=0
 runbook_rc=0
@@ -47,7 +48,7 @@ record production.snapshot rc=0
 ## 6. schema.expand — the whole chain
 check-ledger rc=0
 ledger-table rc=0
-chain: 558 of 558 applied, 0 failed, 94s (incl. one record per file)
+chain: 558 of 558 applied, 0 failed, 88s (incl. one record per file)
 ## census (briefing §4 item 6), before any code points at the new project
 check-production --stage schema rc=0
 record schema.expand rc=0
