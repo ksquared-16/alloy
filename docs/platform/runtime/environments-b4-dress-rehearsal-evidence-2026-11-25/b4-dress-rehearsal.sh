@@ -421,6 +421,24 @@ diff "$D/census-before-step16.txt" "$R/R1-after-rollback-census-extras.txt" > "$
 diff "$D/census-orgs.txt" "$R/R1-after-rollback-orgs.txt" > /dev/null && echo "orgs equal step 9"  || echo "ORGS DIFFER"
 t1 "R1 16.R removal + proof" "inside T+2:25–2:50" 1500 "rc=$RC"
 
+echo "### R1b after 16.R: step 16 again from 16.2, same Auth user, same baseline (the cause fixed, time allowing)"
+t0
+tc "${TG[@]}" "${AA[@]}" --log "$R/R1b-tenant-create.log" --dry-run > "$R/R1b-2-create-dry-run.txt" 2>&1 || die "R1b 16.2"
+grep -E '^orgs now|\|retired\||^dry run' "$R/R1b-2-create-dry-run.txt"
+echo "firefly-early-learning" | tc "${TG[@]}" "${AA[@]}" --log "$R/R1b-tenant-create.log" > "$R/R1b-3-create.txt" 2>&1 || die "R1b 16.3"
+ORG2=$(sed -n 's/^ORG_ID=//p' "$R/R1b-3-create.txt"); echo "R1b 16.3 created org $ORG2 (first run's was $ORG)"; [ -n "$ORG2" ] || die "R1b no ORG_ID"
+I2=("${TG[@]}" --org-id "$ORG2" --admin-user-id "$ADM" --file "$D/firefly-config-export.json" --expect-sha256 "$EXPORT_SHA")
+ti plan "${I2[@]}" --log "$R/R1b-import.log" > "$R/R1b-4-import-plan.txt" 2>&1 || die "R1b 16.4"
+grep '^summary' "$R/R1b-4-import-plan.txt"
+echo "${ORG2:0:8}" | ti apply "${I2[@]}" --log "$R/R1b-import.log" > "$R/R1b-5-import-apply.txt" 2>&1 || die "R1b 16.5"
+tail -1 "$R/R1b-5-import-apply.txt"
+$REL emit-sql census | NEWDB -At -X -f - > "$R/R1b-after-census-extras.txt"
+ti verify "${I2[@]}" --log "$R/R1b-verify.log" --baseline "$D/census-before-step16.txt" --after-census "$R/R1b-after-census-extras.txt" --release-config "$D/release-config.json" > "$R/R1b-6-verify.txt" 2>&1; RC=$?
+grep -E '^(PASS|FAIL)|✓|✗' "$R/R1b-6-verify.txt" | cut -c1-150
+$REL emit-sql orgs | NEWDB -At -X -f - > "$R/R1b-after-orgs.txt"
+echo "orgs after the re-run: $(tr '\n' ' ' < "$R/R1b-after-orgs.txt")"
+t1 "R1b step 16 re-run after 16.R" "inside T+2:25–2:50" 1500 "verify rc=$RC ($(grep -c '^PASS' "$R/R1b-6-verify.txt") PASS)"
+
 echo "### R2 T+2:20 roll back: clock first, then code (Vercel Instant Rollback simulated), audit"
 t0
 q1 "delete from vault.secrets where name = 'scheduled_work_wake_credential'" > /dev/null

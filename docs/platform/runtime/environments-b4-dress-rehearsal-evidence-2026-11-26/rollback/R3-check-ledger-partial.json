@@ -1,0 +1,7 @@
+{
+  "ok": false,
+  "failures": [
+    "first promotion: the target's ledger is no longer empty (40 version(s)); refusing the chain",
+    "production's ledger changed since the approval; prepare and approve again"
+  ]
+}

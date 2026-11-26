@@ -1,0 +1,35 @@
+started: tenant:config:import plan plan --target local --supabase-url http://127.0.0.1:52558 --org-id b35c27ef-2bef-4708-a950-ebbf6196b0d1 --admin-user-id b5be4dcb-8746-4e85-994c-4026c39697a4 --file /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b4-dress-rehearsal-evidence-2026-11-26/release/firefly-config-export.json --expect-sha256 c0576fe1273fe364e0348922e48bcbbe4f10c0fc9c93685e6ed408fb43f59bb5 --log /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b4-dress-rehearsal-evidence-2026-11-26/rollback/R1b-import.log
+file: /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b4-dress-rehearsal-evidence-2026-11-26/release/firefly-config-export.json  sha256 c0576fe1273fe364e0348922e48bcbbe4f10c0fc9c93685e6ed408fb43f59bb5
+export of "Firefly Early Learning" (local, 2026-11-26T07:46:41.946Z): {"sites":3,"rooms":17,"household_role_types":6,"enrollment_process":1}
+target: local http://127.0.0.1:52558
+org: b35c27ef-2bef-4708-a950-ebbf6196b0d1|active|Firefly Early Learning (firefly-early-learning)
+plan (27 item(s)):
+  create          site:north-campus                        site "North Campus"
+  create          site:south-campus                        site "South Campus"
+  create          site:west-campus                         site "West Campus"
+  create          room:south-campus/bears                  room "Bears" at South Campus
+  create          room:south-campus/giraffe                room "Giraffe" at South Campus
+  create          room:north-campus/infant-a               room "Infant A" at North Campus
+  create          room:west-campus/infant-a                room "Infant A" at West Campus
+  create          room:north-campus/infant-b               room "Infant B" at North Campus
+  create          room:west-campus/infant-b                room "Infant B" at West Campus
+  create          room:south-campus/monkeys                room "Monkeys" at South Campus
+  create          room:north-campus/pre-k                  room "Pre-K" at North Campus
+  create          room:west-campus/preschool               room "Preschool" at West Campus
+  create          room:north-campus/preschool-1            room "Preschool 1" at North Campus
+  create          room:north-campus/preschool-2            room "Preschool 2" at North Campus
+  create          room:south-campus/tigers                 room "Tigers" at South Campus
+  create          room:north-campus/toddler-1              room "Toddler 1" at North Campus
+  create          room:west-campus/toddler-1               room "Toddler 1" at West Campus
+  create          room:north-campus/toddler-2              room "Toddler 2" at North Campus
+  create          room:west-campus/toddler-2               room "Toddler 2" at West Campus
+  create          room:south-campus/zebras                 room "Zebras" at South Campus
+  create          role_type:child                          role type child
+  create          role_type:parent                         role type parent
+  create          role_type:guardian                       role type guardian
+  create          role_type:emergency_contact              role type emergency_contact
+  create          role_type:authorized_pickup              role type authorized_pickup
+  create          role_type:payer                          role type payer
+  create          process:lead_management/enrollment       department lead_management "Enrollment", publish process enrollment (8 stages), derive work units
+summary: 27 to create, 0 to complete, 0 already present, 0 present but different (left unchanged)
+dry run: nothing was written

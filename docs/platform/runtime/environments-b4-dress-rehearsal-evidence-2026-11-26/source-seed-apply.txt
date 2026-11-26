@@ -1,0 +1,68 @@
+Firefly staging seed → local (postgresql://postgres:***@127.0.0.1:54422/firefly_seed_scratch_b4_source)
+ transaction_id_assigned 
+-------------------------
+ t
+(1 row)
+
+ seed_target 
+-------------
+ local
+(1 row)
+
+== Preflight refusals ==
+== Fence: count every row that is not a seed row ==
+== Gates: which configuration the Firefly org already has ==
+   seed authors — campuses: true  enrollment: true  catalog: true  roles: true
+== Household role vocabulary ==
+== Enrollment department + business process ==
+== Campuses, rooms, programs ==
+== Offerings, tuition, charge templates ==
+== Households (60), guardians (100), children (75) ==
+== Family cases (60) and child participation (75) ==
+== Fence: prove no row but the seed rows changed ==
+== Firefly staging seed complete — verify with: npm run staging:seed:firefly -- verify --target <target> ==
+✓ fence held — 355 tables, 0 rows changed outside the seed rows
+  PASS  firefly_org_present                  expected 1  actual 1
+  PASS  orgs_in_seed_namespace               expected 0  actual 0
+  PASS  seed_ids_outside_firefly             expected 0  actual 0
+  PASS  department_enrollment                expected 1  actual 1
+  PASS  work_units                           expected 3  actual 3
+  PASS  sites                                expected 3  actual 3
+  PASS  rooms                                expected 17  actual 17
+  PASS  program_categories                   expected 16  actual 16
+  PASS  program_offerings                    expected 8  actual 8
+  PASS  offering_variants                    expected 28  actual 28
+  PASS  tuition_rates                        expected 28  actual 28
+  PASS  charge_templates                     expected 2  actual 2
+  PASS  role_type_keys                       expected 6  actual 6
+  PASS  household_roles_in_vocabulary        expected 0  actual 0
+  PASS  households                           expected 60  actual 60
+  PASS  guardians                            expected 100  actual 100
+  PASS  household_memberships                expected 100  actual 100
+  PASS  children                             expected 75  actual 75
+  PASS  child_relationships                  expected 75  actual 75
+  PASS  family_cases                         expected 60  actual 60
+  PASS  case_contacts                        expected 100  actual 100
+  PASS  child_participations                 expected 75  actual 75
+  PASS  stage_closed                         expected 6  actual 6
+  PASS  stage_closed_withdrawn               expected 3  actual 3
+  PASS  stage_decision                       expected 5  actual 5
+  PASS  stage_enrolled                       expected 12  actual 12
+  PASS  stage_enrolling                      expected 5  actual 5
+  PASS  stage_lead                           expected 14  actual 14
+  PASS  stage_tour                           expected 8  actual 8
+  PASS  stage_waitlist                       expected 7  actual 7
+  PASS  family_cases_at_a_firefly_site       expected 60  actual 60
+  PASS  work_unit_outside_firefly_enrollment expected 0  actual 0
+  PASS  open_case_without_work_unit          expected 0  actual 0
+  PASS  program_category_outside_firefly     expected 0  actual 0
+  PASS  open_case_stage_not_in_process       expected 0  actual 0
+  PASS  guardian_email_not_reserved          expected 0  actual 0
+  PASS  guardian_phone_not_fictional         expected 0  actual 0
+  PASS  known_first_family                   expected Alder Family [Staging seed]/lead/open  actual Alder Family [Staging seed]/lead/open
+  PASS  known_sibling_family_children        expected 2  actual 2
+  PASS  known_enrolled_child_stage           expected enrolled/enrolled  actual enrolled/enrolled
+  PASS  known_registration_fee_cents         expected 7500  actual 7500
+  PASS  known_room_giraffe_capacity          expected 12  actual 12
+  fingerprint 894053617add3d633aa24da78d4696e2
+✓ verification passed

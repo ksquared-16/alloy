@@ -1,0 +1,4 @@
+applied 40 files, then 20260414140000 with an injected error: rc=3 (psql:<stdin>:112: ERROR:  division by zero)
+ledger rows after the failure: 40 (the failing file recorded nothing); public tables 130 -> 130
+check-ledger on the partly built project rc=1 (resume refused)
+plan --first-promotion (a fixed-forward candidate) over it rc=1 (first_promotion_ledger_not_empty: the target records 40 version(s) (head 20260414100000); first-promotion mode runs only against a new proje)

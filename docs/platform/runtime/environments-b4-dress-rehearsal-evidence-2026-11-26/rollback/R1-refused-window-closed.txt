@@ -1,0 +1,13 @@
+BEGIN
+SET
+              set_config              |       set_config       
+--------------------------------------+------------------------
+ 97123816-01e9-45bc-904c-9f5274810ad7 | Firefly Early Learning
+(1 row)
+
+psql:<stdin>:105: NOTICE:  holds rows: business_process_drafts 1
+psql:<stdin>:105: NOTICE:  holds rows: business_process_revisions 1
+psql:<stdin>:105: NOTICE:  holds rows: configuration_publications 1
+psql:<stdin>:105: NOTICE:  holds rows: customer_person_role_types 6
+psql:<stdin>:105: ERROR:  rollback refused (window_closed): customers holds 1 row(s) for the org; real records exist (briefing §7)
+CONTEXT:  PL/pgSQL function inline_code_block line 33 at RAISE

@@ -1,0 +1,5 @@
+branch=9d22f21f8f48b66d4e136f2bc9223a8cac9ca51e origin/staging=8321949771f7fb6b2f04de6feb1fdd6ccb8e1484 origin/main=bbfbec76d7795cc3392b0c61e1c8ce829adaf9d2 simulated_staging=0990bc02ccc527f135eb3fae1f8c795e0069e562
+candidate=1927cab3495bb103506476499ba8a19b4af8b17a
+candidate migrations: 558 files, head 20261223090000_w17_selftest_org_retirement.sql; added by step 1: 1 (20261223090000_w17_selftest_org_retirement.sql)
+candidate workflows with schedule: []
+DrawerSummaryStripBoundary hits: 14 (1 outside web/tests/)
