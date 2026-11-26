@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
@@ -18,6 +18,8 @@ import {
   QA_STRUCTURE,
   RESERVED_ROLE_KEYS,
   SEEDED_ASSIGNABLE_ROLES,
+  isForbiddenQaOrgId,
+  isRegisteredQaOrgId,
 } from "@/lib/qa/sharedQaRegistry";
 import {
   auditQaAuthzFixtureSql,
@@ -148,6 +150,120 @@ describe("shared QA B2 registry — B1 identity parity", () => {
     expect([...SEEDED_ASSIGNABLE_ROLES]).toEqual(["admin", "ops", "school_director"]);
     expect(RESERVED_ROLE_KEYS).toContain("owner");
     expect(RESERVED_ROLE_KEYS).toContain("admin");
+  });
+});
+
+/**
+ * ALY-14 E3 owner decision (a), 2026-11-25: Firefly is the staging org of the three managed slot
+ * identities only. The shared-QA plans keep their ZZ Alloy QA tenant and keep refusing Firefly by id;
+ * only the registry comment and personas §2 changed.
+ */
+describe("shared QA registry — Firefly fence under E3 decision (a)", () => {
+  const MANAGED_SLOT_LOGINS = [
+    "qa-slot1-product@example.com",
+    "qa-slot5-refactor@example.com",
+    "qa-slot12-work-items@example.com",
+  ];
+
+  it("keeps Firefly forbidden and unregistered for every shared-QA plan", () => {
+    expect([...FORBIDDEN_QA_ORG_IDS]).toEqual(["93667019-bd28-49b5-a688-acc9bb1e0a19"]);
+    expect(isForbiddenQaOrgId(FIREFLY)).toBe(true);
+    expect(isRegisteredQaOrgId(FIREFLY)).toBe(false);
+    const refusal = refuseForbiddenOrg(FIREFLY);
+    expect(refusal.ok).toBe(false);
+    expect(refusal.ok ? null : refusal.code).toBe("firefly_refused");
+    expect(Object.values(QA_ORGS).map((o) => o.id)).not.toContain(FIREFLY);
+  });
+
+  it("keeps ZZ Alloy QA as the only shared-QA plan tenant", () => {
+    expect(Object.values(QA_ORGS).map((o) => o.name)).toEqual(["ZZ Alloy QA", "ZZ Alloy QA — Cross-Org"]);
+    for (const org of Object.values(QA_ORGS)) {
+      expect(isRegisteredQaOrgId(org.id)).toBe(true);
+      expect(isForbiddenQaOrgId(org.id)).toBe(false);
+    }
+    const orgKeys = new Set(Object.keys(QA_ORGS));
+    for (const identity of Object.values(QA_IDENTITIES)) expect(orgKeys.has(identity.org)).toBe(true);
+    for (const structure of [...Object.values(QA_STRUCTURE.departments), ...Object.values(QA_STRUCTURE.sites)]) {
+      expect(orgKeys.has(structure.org)).toBe(true);
+    }
+  });
+
+  it("does not register the managed slot logins as shared-QA identities", () => {
+    const emails = Object.values(QA_IDENTITIES).map((i) => i.email);
+    for (const login of MANAGED_SLOT_LOGINS) expect(emails).not.toContain(login);
+  });
+
+  it("narrows only the registry comment, and personas §2 names the slot-identity exception", () => {
+    const registry = readFileSync(join(WEB, "lib/qa/sharedQaRegistry.ts"), "utf8");
+    expect(registry).toContain("never a shared-QA plan target; the managed slot");
+    expect(registry).toContain("identities' staging org");
+    expect(registry).not.toMatch(/Firefly[^\n]*never a QA target\. \*\//);
+    const personas = readFileSync(join(ROOT, "docs/platform/governance/authorization-qa-personas.md"), "utf8");
+    const section2 = personas.slice(personas.indexOf("## 2. Tenancy"), personas.indexOf("## 3."));
+    expect(section2).toContain("**Never a QA target:** Firefly (`93667019-bd28-49b5-a688-acc9bb1e0a19`)");
+    const exception = section2.split("\n").filter((line) => line.includes("Slot-identity exception"));
+    expect(exception).toHaveLength(1);
+    for (const login of ["qa-slot1-product", "qa-slot5-refactor", "qa-slot12-work-items@example.com"]) {
+      expect(exception[0]).toContain(login);
+    }
+    expect(exception[0]).toContain("ZZ Alloy QA");
+  });
+});
+
+/**
+ * ALY-14 E4: ZZ Alloy QA stays the tenant of the existing cross-organization and permission fixtures,
+ * and no fixture introduces another tenant. Every UUID a fixture names is a registered QA org, a
+ * registered QA structure id, a fixture-namespace row id (`xx000000-`) or a listed non-org id.
+ */
+describe("shared QA fixtures — ZZ Alloy QA is the only fixture tenant (E4)", () => {
+  const QA_FIXTURE_FILES = readdirSync(join(ROOT, "certification/fixtures"))
+    .filter((f) => /^qa-.*\.sql$/.test(f))
+    .map((f) => `certification/fixtures/${f}`);
+  const CROSS_ORG_INVARIANTS = [
+    "certification/invariants/documents-d9-hosted-fixture.sql",
+    "certification/invariants/documents-q1-g1-subject-fixtures.sql",
+    "certification/invariants/documents-r5-shared-child-fixture.sql",
+    "certification/invariants/documents-d6-requirements.sql",
+  ];
+  /* Prior Documents form ids the forms-residue reset removes; forms, not organizations. */
+  const NON_ORG_IDS = new Set([
+    "01c4bf36-39ea-4ab8-8966-8fd850e381fe",
+    "6a565dc9-fab7-4220-ada2-3d7b55036f26",
+    "6f2e664b-97a2-464b-b3ac-405c7810bbcb",
+    "7e36208b-5250-407c-bb90-31e80adfc277",
+    "8dd68ff9-fad9-49c1-8bda-e998571faddf",
+  ]);
+  const KNOWN_IDS = new Set<string>([
+    ...Object.values(QA_ORGS).map((o) => o.id),
+    ...Object.values(QA_STRUCTURE.departments).map((d) => d.id),
+    ...Object.values(QA_STRUCTURE.sites).map((s) => s.id),
+  ]);
+  const uuids = (sql: string) =>
+    [...new Set(sql.toLowerCase().match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g) ?? [])];
+
+  it("finds the existing permission and cross-org fixtures", () => {
+    expect(QA_FIXTURE_FILES).toEqual(
+      expect.arrayContaining([QA_AUTHZ_FIXTURE_PATHS.ensure, QA_AUTHZ_FIXTURE_PATHS.reset]),
+    );
+    expect(QA_FIXTURE_FILES).toContain("certification/fixtures/qa-authz-subjects-ensure.sql");
+  });
+
+  for (const file of [...QA_FIXTURE_FILES, ...CROSS_ORG_INVARIANTS]) {
+    it(`${file}: names only ZZ Alloy QA ids, never Firefly, and creates no organization`, () => {
+      const sql = readFileSync(join(ROOT, file), "utf8");
+      const ids = uuids(sql);
+      expect(ids).toContain(QA_SHARED);
+      expect(ids).not.toContain(FIREFLY);
+      const unknown = ids.filter((id) => !KNOWN_IDS.has(id) && !NON_ORG_IDS.has(id) && !/^[0-9a-f]{2}000000-/.test(id));
+      expect(unknown).toEqual([]);
+      expect(sql).not.toMatch(/insert\s+into\s+(public\.)?organizations\b/i);
+    });
+  }
+
+  it("the cross-org and permission fixtures target ZZ Alloy QA — Cross-Org as the second tenant", () => {
+    for (const file of [...CROSS_ORG_INVARIANTS, QA_AUTHZ_FIXTURE_PATHS.ensure, "certification/fixtures/qa-authz-subjects-ensure.sql"]) {
+      expect(uuids(readFileSync(join(ROOT, file), "utf8"))).toContain(QA_ORGS.qa_secondary.id);
+    }
   });
 });
 

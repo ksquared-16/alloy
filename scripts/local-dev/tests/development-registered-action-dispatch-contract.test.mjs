@@ -62,8 +62,15 @@ function fixture() {
   writeFileSync(join(work, "product.ts"), "export const real = 1;\n");
   g(["add", "product.ts"], work);
   g(["commit", "-qm", "product code that must never move"], work);
-  g(["push", "-q", "origin", "main"], work);
+  // Seed origin by FETCHING into it, not pushing from work. This is setup, not
+  // the behavior under test, and a push here is refused outright by an
+  // environment that rewrites every push URL (see PUSH_GUARDED). The resulting
+  // state - origin carrying main, work tracking it - is the same either way.
+  execFileSync("git", ["--git-dir", bare, "fetch", "-q", work, "main:main"]);
+  g(["fetch", "-q", "origin"], work);
+  g(["branch", "-q", "--set-upstream-to", "origin/main", "main"], work);
   const mainSha = g(["rev-parse", "HEAD"], work);
+  assert.equal(g(["rev-parse", "refs/heads/main"], bare), mainSha, "fixture origin must carry main");
 
   // The candidate: exactly one commit adding exactly one workflow file.
   g(["checkout", "-q", "-b", "candidate"], work);
@@ -73,6 +80,46 @@ function fixture() {
   g(["commit", "-qm", "chore(repo-ops): tier 2 workflow definition"], work);
   const candidate = g(["rev-parse", "HEAD"], work);
   return { base, bare, work, mainSha, candidate };
+}
+
+/*
+ * THE PUSH GUARD. An agent session may run with every push rewritten to a helper
+ * that aborts (`url.<blocked>://.pushInsteadOf ""`, injected via GIT_CONFIG_*),
+ * so no push - not even to a bare repo in a temp directory - can leave it. The
+ * guard is left exactly as it is; this only asks git, without pushing, whether
+ * the fixture's origin would be pushed to as itself.
+ *
+ * Guarded, the executor's final `git push` is refused, so the cases that need
+ * main to MOVE instead prove everything up to that push through the same real
+ * dispatch: the factory ran, the one-commit/one-file write was built, the
+ * refusal reached the operator, and origin's main did not move.
+ */
+function probePushGuard() {
+  const f = fixture();
+  try {
+    const fetchUrl = g(["remote", "get-url", "origin"], f.work);
+    const pushUrl = g(["remote", "get-url", "--push", "origin"], f.work);
+    return pushUrl !== fetchUrl ? pushUrl : null;
+  } finally { rmSync(f.base, { recursive: true, force: true }); }
+}
+const PUSH_GUARD_URL = probePushGuard();
+const PUSH_GUARDED = PUSH_GUARD_URL !== null;
+if (PUSH_GUARDED) {
+  process.stdout.write(`# push guard active (origin pushes to ${PUSH_GUARD_URL.split("/")[0]}//...): `
+    + `success-path cases assert the guarded refusal and the built commit instead\n`);
+}
+
+/** Under the guard: the dispatch reached the push, built exactly the approved write, and moved nothing. */
+function assertGuardedPushRefusal(f, out) {
+  assert.equal(out.ok, false, "a push was expected to be refused under the push guard");
+  assert.equal(out.error, "metadata_push_failed", `refused before the push: ${out.error} — ${out.detail || ""}`);
+  const r = out.action.result;
+  assert.equal(typeof r.main_before, "string");
+  assert.equal(r.main_before, f.mainSha);
+  assert.equal(typeof r.built_commit, "string", "the commit the push would have carried must be named");
+  assert.equal(r.product_files_changed, false);
+  assert.equal(g(["rev-parse", "refs/heads/main"], f.bare), f.mainSha, "origin main must not move when the push is refused");
+  return r.built_commit;
 }
 
 /** A pre-authorized action record, written straight into the isolated store. */
@@ -128,6 +175,13 @@ test("D1 — an approved metadata promotion reaches its executor through the rea
     const out = dispatch(seedAction(normalized(f)));
     assert.notEqual(out.error, "unknown_action_type");
     assert.notEqual(out.error, "action_unavailable");
+    assert.notEqual(out.error, "metadata_promote_threw", "the specimen: the factory threw when it ran");
+    if (PUSH_GUARDED) {
+      // Reaching the push at all means the constructed git ran every prior step.
+      assertGuardedPushRefusal(f, out);
+      assert.equal(out.action.result.product_files_changed, false);
+      return;
+    }
     assert.equal(out.ok, true, `dispatch failed: ${out.error || ""} — ${out.detail || ""}`);
     // This is the assertion the 29 executor cases could not make: the git the
     // wrapper constructs is the one that actually ran.
@@ -140,6 +194,16 @@ test("D1a — and the write it performed is exactly one workflow file", () => {
   const f = fixture();
   try {
     const out = dispatch(seedAction(normalized(f)));
+    if (PUSH_GUARDED) {
+      // The write that WOULD have reached main, read from the commit the
+      // executor built and named: one commit on the approved main, one file.
+      const built = assertGuardedPushRefusal(f, out);
+      assert.equal(g(["rev-parse", `${built}^`], f.work), f.mainSha, "the built commit must sit directly on the approved main");
+      const changed = g(["diff", "--name-only", `${f.mainSha}..${built}`], f.work).split("\n").filter(Boolean);
+      assert.deepEqual(changed, [WF]);
+      assert.equal(g(["rev-list", "--count", `${f.mainSha}..${built}`], f.work), "1", "exactly one commit may reach main");
+      return;
+    }
     assert.equal(out.ok, true, out.detail || out.error || "");
     const after = g(["rev-parse", "refs/heads/main"], f.bare);
     assert.notEqual(after, f.mainSha, "main did not move");
@@ -256,6 +320,17 @@ test("R1 — the dispatched result carries every field the registry declares", (
   const f = fixture();
   try {
     const out = dispatch(seedAction(normalized(f)));
+    if (PUSH_GUARDED) {
+      // A successful result cannot be produced without the push. What CAN be
+      // checked on the real dispatched refusal: the fields a retry and an
+      // operator need to tell whether main moved.
+      assertGuardedPushRefusal(f, out);
+      for (const k of ["ok", "code", "detail", "main_before", "main_after", "built_commit", "product_files_changed"]) {
+        assert.ok(k in out.action.result, `refusal result is missing ${k}`);
+      }
+      process.stdout.write("#   R1 success-shape check needs a real push; not measurable under the push guard\n");
+      return;
+    }
     assert.equal(out.ok, true, out.detail || out.error || "");
     const declared = Object.keys(getActionDefinition(ACTION_TYPES.REPOSITORY_PROMOTE_METADATA).outputSchema || {});
     assert.ok(declared.length > 0, "the action must declare what its consumers get");
@@ -268,7 +343,16 @@ test("R1 — the dispatched result carries every field the registry declares", (
 test("R1a — and the declared fields are not silently null on a successful write", () => {
   const f = fixture();
   try {
-    const r = dispatch(seedAction(normalized(f))).action.result;
+    const out = dispatch(seedAction(normalized(f)));
+    if (PUSH_GUARDED) {
+      const built = assertGuardedPushRefusal(f, out);
+      // Not null: a refused push still reports where main is, and it is where it was.
+      assert.equal(typeof out.action.result.main_after, "string");
+      assert.equal(out.action.result.main_after, g(["rev-parse", "refs/heads/main"], f.bare));
+      assert.notEqual(built, f.mainSha);
+      return;
+    }
+    const r = out.action.result;
     assert.equal(typeof r.main_before, "string");
     assert.equal(typeof r.main_after, "string");
     assert.notEqual(r.main_after, r.main_before, "a successful write moves the branch");

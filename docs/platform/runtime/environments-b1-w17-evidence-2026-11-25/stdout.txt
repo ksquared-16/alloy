@@ -1,0 +1,11 @@
+tree=3a4242f43ac54d052fb13abc8106460d591e74ab files=558 head=20261223090000_w17_selftest_org_retirement.sql
+A gotrue_migrate_rc=0
+A storage_migrate_rc=0
+A networks_attached=[]
+A chain_result=ALL APPLIED (558 files)
+A teardown: containers=[] networks=[]
+B gotrue_migrate_rc=0
+B storage_migrate_rc=0
+B networks_attached=[]
+B chain_result=APPLIED to staging head (557 files)
+B teardown: containers=[] networks=[]

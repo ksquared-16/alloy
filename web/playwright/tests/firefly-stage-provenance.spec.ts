@@ -1,4 +1,8 @@
 /**
+ * RETIRED as a configuration source (briefing M8; P3 C14, X3): its output is a structural fixture only, never a
+ * tenant's configuration. Tenant transfer uses `tenant:config:export` / `tenant:config:import`
+ * (docs/sprints/active/assets/firefly-config/README.md).
+ *
  * Firefly stage provenance — read-only capture of the RAW published stage list.
  *
  * Answers the one question the code cannot answer alone: are `qualification` / `decision`

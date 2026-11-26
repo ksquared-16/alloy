@@ -1,0 +1,29 @@
+2026-11-26T07:30:07.654Z [tenant:create] started: tenant:create --target local --supabase-url http://127.0.0.1:58096 --name Firefly Early Learning --slug firefly-early-learning --industry childcare --admin-user-id a2599373-3870-4575-b4fa-99892020ad21 --admin-email firefly-admin@b4-rehearsal.invalid --admin-full-name Firefly Admin (B4 rehearsal) --log /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b4-dress-rehearsal-evidence-2026-11-25/release/step16-tenant-create.log --dry-run
+2026-11-26T07:30:07.673Z [tenant:create] target: local http://127.0.0.1:58096
+2026-11-26T07:30:07.687Z [tenant:create] orgs now (1):
+2026-11-26T07:30:07.688Z [tenant:create]   85433b1a-55c2-47de-b23f-afed42e9f61a|retired|_w17_selftest_85433b1a
+2026-11-26T07:30:07.707Z [tenant:create] admin a2599373-3870-4575-b4fa-99892020ad21 (firefly-admin@b4-rehearsal.invalid) holds 0 membership(s) today
+2026-11-26T07:30:07.707Z [tenant:create] plan:
+2026-11-26T07:30:07.707Z [tenant:create]   set the admin account's name (Auth user_metadata.full_name) to "Firefly Admin (B4 rehearsal)"
+2026-11-26T07:30:07.707Z [tenant:create]   insert orgs: id c680225e-61b8-4908-bcb1-4df0d986005e, name "Firefly Early Learning", slug firefly-early-learning, status active, industry childcare (281b1178-8c14-49c4-b9bb-d086d3221133)
+2026-11-26T07:30:07.707Z [tenant:create]   insert one admin membership for a2599373-3870-4575-b4fa-99892020ad21 (firefly-admin@b4-rehearsal.invalid) via create_membership_with_access_profile
+2026-11-26T07:30:07.707Z [tenant:create]   provision the person-child relationship field configuration (sections, option sets, field definitions)
+2026-11-26T07:30:07.707Z [tenant:create]   nothing else: no demo data, no records, no other users
+2026-11-26T07:30:07.707Z [tenant:create] dry run: nothing was written
+2026-11-26T07:30:08.065Z [tenant:create] started: tenant:create --target local --supabase-url http://127.0.0.1:58096 --name Firefly Early Learning --slug firefly-early-learning --industry childcare --admin-user-id a2599373-3870-4575-b4fa-99892020ad21 --admin-email firefly-admin@b4-rehearsal.invalid --admin-full-name Firefly Admin (B4 rehearsal) --log /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b4-dress-rehearsal-evidence-2026-11-25/release/step16-tenant-create.log
+2026-11-26T07:30:08.085Z [tenant:create] target: local http://127.0.0.1:58096
+2026-11-26T07:30:08.094Z [tenant:create] orgs now (1):
+2026-11-26T07:30:08.094Z [tenant:create]   85433b1a-55c2-47de-b23f-afed42e9f61a|retired|_w17_selftest_85433b1a
+2026-11-26T07:30:08.107Z [tenant:create] admin a2599373-3870-4575-b4fa-99892020ad21 (firefly-admin@b4-rehearsal.invalid) holds 0 membership(s) today
+2026-11-26T07:30:08.108Z [tenant:create] plan:
+2026-11-26T07:30:08.108Z [tenant:create]   set the admin account's name (Auth user_metadata.full_name) to "Firefly Admin (B4 rehearsal)"
+2026-11-26T07:30:08.108Z [tenant:create]   insert orgs: id 91b192e0-4267-4383-bbc4-906d1814125f, name "Firefly Early Learning", slug firefly-early-learning, status active, industry childcare (281b1178-8c14-49c4-b9bb-d086d3221133)
+2026-11-26T07:30:08.108Z [tenant:create]   insert one admin membership for a2599373-3870-4575-b4fa-99892020ad21 (firefly-admin@b4-rehearsal.invalid) via create_membership_with_access_profile
+2026-11-26T07:30:08.108Z [tenant:create]   provision the person-child relationship field configuration (sections, option sets, field definitions)
+2026-11-26T07:30:08.108Z [tenant:create]   nothing else: no demo data, no records, no other users
+2026-11-26T07:30:08.109Z [tenant:create] confirmed: "firefly-early-learning"
+2026-11-26T07:30:08.114Z [tenant:create] admin account named "Firefly Admin (B4 rehearsal)"
+2026-11-26T07:30:08.223Z [tenant:create] created org 91b192e0-4267-4383-bbc4-906d1814125f slug firefly-early-learning
+2026-11-26T07:30:08.226Z [tenant:create] memberships in the new org: a2599373-3870-4575-b4fa-99892020ad21|admin
+2026-11-26T07:30:08.226Z [tenant:create] ORG_ID=91b192e0-4267-4383-bbc4-906d1814125f
+2026-11-26T07:30:08.226Z [tenant:create] done

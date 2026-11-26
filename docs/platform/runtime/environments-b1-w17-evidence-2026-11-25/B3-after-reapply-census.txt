@@ -1,0 +1,14 @@
+## B3-after-reapply: orgs whose slug starts with _w17_selftest_
+9fb1e52a-51a1-4164-8785-795029faf923 | name=_w17_selftest_9fb1e52a | slug=_w17_selftest_9fb1e52a | status=retired
+## B3-after-reapply: all orgs
+1
+## B3-after-reapply: rows owned by the W-17 org(s), per org-scoped public table (non-zero only)
+DO
+document_categories 10
+document_type_versions 13
+document_types 13
+mutation_events 4
+role_definitions 6
+role_permission_grants 158
+## B3-after-reapply: ledger
+558 rows, head 20261223090000

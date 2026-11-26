@@ -1,0 +1,12 @@
+;
+; Archive created at 2026-11-25 14:20:15 PST
+;     dbname: postgres
+;     TOC Entries: 1850
+;     Compression: gzip
+;     Dump Version: 1.16-0
+;     Format: CUSTOM
+;     Integer: 4 bytes
+;     Offset: 8 bytes
+;     Dumped from database version: 17.6
+;     Dumped by pg_dump version: 18.6
+;

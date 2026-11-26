@@ -1,0 +1,187 @@
+2026-11-26T06:32:01.575Z [tenant:config:import plan] started: tenant:config:import plan plan --target local --supabase-url http://127.0.0.1:50513 --org-id 9d471491-ff8b-483c-86e9-049d8a0fae49 --admin-user-id b7bec213-bfd0-429f-ae76-a476ea380bde --log /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/step16-retry-import.log --file /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/firefly-config-export-with-work-units.json --expect-sha256 ade2da71a80549d18541774b877a9d335066bf812ffafc22c852cfb93facb561
+2026-11-26T06:32:01.576Z [tenant:config:import plan] file: /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/firefly-config-export-with-work-units.json  sha256 ade2da71a80549d18541774b877a9d335066bf812ffafc22c852cfb93facb561
+2026-11-26T06:32:01.577Z [tenant:config:import plan] export of "Firefly Early Learning" (local, 2026-11-26T06:31:11.690Z): {"sites":3,"rooms":17,"household_role_types":6,"enrollment_process":1}
+2026-11-26T06:32:01.579Z [tenant:config:import plan] target: local http://127.0.0.1:50513
+2026-11-26T06:32:01.590Z [tenant:config:import plan] org: 9d471491-ff8b-483c-86e9-049d8a0fae49|active|Firefly Early Learning (firefly-early-learning)
+2026-11-26T06:32:01.625Z [tenant:config:import plan] plan (27 item(s)):
+2026-11-26T06:32:01.625Z [tenant:config:import plan]   create          site:north-campus                        site "North Campus"
+2026-11-26T06:32:01.625Z [tenant:config:import plan]   create          site:south-campus                        site "South Campus"
+2026-11-26T06:32:01.625Z [tenant:config:import plan]   create          site:west-campus                         site "West Campus"
+2026-11-26T06:32:01.626Z [tenant:config:import plan]   create          room:south-campus/bears                  room "Bears" at South Campus
+2026-11-26T06:32:01.626Z [tenant:config:import plan]   create          room:south-campus/giraffe                room "Giraffe" at South Campus
+2026-11-26T06:32:01.626Z [tenant:config:import plan]   create          room:north-campus/infant-a               room "Infant A" at North Campus
+2026-11-26T06:32:01.626Z [tenant:config:import plan]   create          room:west-campus/infant-a                room "Infant A" at West Campus
+2026-11-26T06:32:01.626Z [tenant:config:import plan]   create          room:north-campus/infant-b               room "Infant B" at North Campus
+2026-11-26T06:32:01.626Z [tenant:config:import plan]   create          room:west-campus/infant-b                room "Infant B" at West Campus
+2026-11-26T06:32:01.626Z [tenant:config:import plan]   create          room:south-campus/monkeys                room "Monkeys" at South Campus
+2026-11-26T06:32:01.626Z [tenant:config:import plan]   create          room:north-campus/pre-k                  room "Pre-K" at North Campus
+2026-11-26T06:32:01.626Z [tenant:config:import plan]   create          room:west-campus/preschool               room "Preschool" at West Campus
+2026-11-26T06:32:01.626Z [tenant:config:import plan]   create          room:north-campus/preschool-1            room "Preschool 1" at North Campus
+2026-11-26T06:32:01.626Z [tenant:config:import plan]   create          room:north-campus/preschool-2            room "Preschool 2" at North Campus
+2026-11-26T06:32:01.626Z [tenant:config:import plan]   create          room:south-campus/tigers                 room "Tigers" at South Campus
+2026-11-26T06:32:01.626Z [tenant:config:import plan]   create          room:north-campus/toddler-1              room "Toddler 1" at North Campus
+2026-11-26T06:32:01.626Z [tenant:config:import plan]   create          room:west-campus/toddler-1               room "Toddler 1" at West Campus
+2026-11-26T06:32:01.626Z [tenant:config:import plan]   create          room:north-campus/toddler-2              room "Toddler 2" at North Campus
+2026-11-26T06:32:01.626Z [tenant:config:import plan]   create          room:west-campus/toddler-2               room "Toddler 2" at West Campus
+2026-11-26T06:32:01.626Z [tenant:config:import plan]   create          room:south-campus/zebras                 room "Zebras" at South Campus
+2026-11-26T06:32:01.626Z [tenant:config:import plan]   create          role_type:child                          role type child
+2026-11-26T06:32:01.626Z [tenant:config:import plan]   create          role_type:parent                         role type parent
+2026-11-26T06:32:01.626Z [tenant:config:import plan]   create          role_type:guardian                       role type guardian
+2026-11-26T06:32:01.626Z [tenant:config:import plan]   create          role_type:emergency_contact              role type emergency_contact
+2026-11-26T06:32:01.627Z [tenant:config:import plan]   create          role_type:authorized_pickup              role type authorized_pickup
+2026-11-26T06:32:01.627Z [tenant:config:import plan]   create          role_type:payer                          role type payer
+2026-11-26T06:32:01.627Z [tenant:config:import plan]   blocked         process:lead_management/enrollment       the org has no opportunity statuses assigned to the stages of lifecycle_wu_closed, lifecycle_wu_closed_withdrawn, lifecycle_wu_decision, lifecycle_wu_enrolled, lifecycle_wu_enrolling, lifecycle_wu_tour, lifecycle_wu_waitlist, so the work-unit repair cannot derive those lanes (P3 C14 status definitions are not transferred); remove derived_work_unit_keys from the reviewed file, or provide the statuses first
+2026-11-26T06:32:01.627Z [tenant:config:import plan] summary: 26 to create, 0 to complete, 0 already present, 0 present but different (left unchanged), 1 blocked
+2026-11-26T06:32:01.627Z [tenant:config:import plan] dry run: nothing was written
+2026-11-26T06:32:02.149Z [tenant:config:import apply] started: tenant:config:import apply apply --target local --supabase-url http://127.0.0.1:50513 --org-id 9d471491-ff8b-483c-86e9-049d8a0fae49 --admin-user-id b7bec213-bfd0-429f-ae76-a476ea380bde --log /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/step16-retry-import.log --file /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/firefly-config-export-with-work-units.json --expect-sha256 ade2da71a80549d18541774b877a9d335066bf812ffafc22c852cfb93facb561
+2026-11-26T06:32:02.151Z [tenant:config:import apply] file: /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/firefly-config-export-with-work-units.json  sha256 ade2da71a80549d18541774b877a9d335066bf812ffafc22c852cfb93facb561
+2026-11-26T06:32:02.152Z [tenant:config:import apply] export of "Firefly Early Learning" (local, 2026-11-26T06:31:11.690Z): {"sites":3,"rooms":17,"household_role_types":6,"enrollment_process":1}
+2026-11-26T06:32:02.153Z [tenant:config:import apply] target: local http://127.0.0.1:50513
+2026-11-26T06:32:02.169Z [tenant:config:import apply] org: 9d471491-ff8b-483c-86e9-049d8a0fae49|active|Firefly Early Learning (firefly-early-learning)
+2026-11-26T06:32:02.192Z [tenant:config:import apply] plan (27 item(s)):
+2026-11-26T06:32:02.192Z [tenant:config:import apply]   create          site:north-campus                        site "North Campus"
+2026-11-26T06:32:02.193Z [tenant:config:import apply]   create          site:south-campus                        site "South Campus"
+2026-11-26T06:32:02.193Z [tenant:config:import apply]   create          site:west-campus                         site "West Campus"
+2026-11-26T06:32:02.193Z [tenant:config:import apply]   create          room:south-campus/bears                  room "Bears" at South Campus
+2026-11-26T06:32:02.193Z [tenant:config:import apply]   create          room:south-campus/giraffe                room "Giraffe" at South Campus
+2026-11-26T06:32:02.193Z [tenant:config:import apply]   create          room:north-campus/infant-a               room "Infant A" at North Campus
+2026-11-26T06:32:02.193Z [tenant:config:import apply]   create          room:west-campus/infant-a                room "Infant A" at West Campus
+2026-11-26T06:32:02.193Z [tenant:config:import apply]   create          room:north-campus/infant-b               room "Infant B" at North Campus
+2026-11-26T06:32:02.193Z [tenant:config:import apply]   create          room:west-campus/infant-b                room "Infant B" at West Campus
+2026-11-26T06:32:02.193Z [tenant:config:import apply]   create          room:south-campus/monkeys                room "Monkeys" at South Campus
+2026-11-26T06:32:02.193Z [tenant:config:import apply]   create          room:north-campus/pre-k                  room "Pre-K" at North Campus
+2026-11-26T06:32:02.193Z [tenant:config:import apply]   create          room:west-campus/preschool               room "Preschool" at West Campus
+2026-11-26T06:32:02.193Z [tenant:config:import apply]   create          room:north-campus/preschool-1            room "Preschool 1" at North Campus
+2026-11-26T06:32:02.193Z [tenant:config:import apply]   create          room:north-campus/preschool-2            room "Preschool 2" at North Campus
+2026-11-26T06:32:02.193Z [tenant:config:import apply]   create          room:south-campus/tigers                 room "Tigers" at South Campus
+2026-11-26T06:32:02.193Z [tenant:config:import apply]   create          room:north-campus/toddler-1              room "Toddler 1" at North Campus
+2026-11-26T06:32:02.193Z [tenant:config:import apply]   create          room:west-campus/toddler-1               room "Toddler 1" at West Campus
+2026-11-26T06:32:02.193Z [tenant:config:import apply]   create          room:north-campus/toddler-2              room "Toddler 2" at North Campus
+2026-11-26T06:32:02.193Z [tenant:config:import apply]   create          room:west-campus/toddler-2               room "Toddler 2" at West Campus
+2026-11-26T06:32:02.193Z [tenant:config:import apply]   create          room:south-campus/zebras                 room "Zebras" at South Campus
+2026-11-26T06:32:02.194Z [tenant:config:import apply]   create          role_type:child                          role type child
+2026-11-26T06:32:02.194Z [tenant:config:import apply]   create          role_type:parent                         role type parent
+2026-11-26T06:32:02.194Z [tenant:config:import apply]   create          role_type:guardian                       role type guardian
+2026-11-26T06:32:02.194Z [tenant:config:import apply]   create          role_type:emergency_contact              role type emergency_contact
+2026-11-26T06:32:02.194Z [tenant:config:import apply]   create          role_type:authorized_pickup              role type authorized_pickup
+2026-11-26T06:32:02.194Z [tenant:config:import apply]   create          role_type:payer                          role type payer
+2026-11-26T06:32:02.194Z [tenant:config:import apply]   blocked         process:lead_management/enrollment       the org has no opportunity statuses assigned to the stages of lifecycle_wu_closed, lifecycle_wu_closed_withdrawn, lifecycle_wu_decision, lifecycle_wu_enrolled, lifecycle_wu_enrolling, lifecycle_wu_tour, lifecycle_wu_waitlist, so the work-unit repair cannot derive those lanes (P3 C14 status definitions are not transferred); remove derived_work_unit_keys from the reviewed file, or provide the statuses first
+2026-11-26T06:32:02.194Z [tenant:config:import apply] summary: 26 to create, 0 to complete, 0 already present, 0 present but different (left unchanged), 1 blocked
+2026-11-26T06:32:02.194Z [tenant:config:import apply] FAILED: refused (blocked): the items above cannot be completed in this org; nothing was written
+2026-11-26T06:32:02.831Z [tenant:config:import apply] started: tenant:config:import apply apply --target local --supabase-url http://127.0.0.1:50513 --org-id 9d471491-ff8b-483c-86e9-049d8a0fae49 --admin-user-id b7bec213-bfd0-429f-ae76-a476ea380bde --log /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/step16-retry-import.log --file /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/firefly-config-export.json --expect-sha256 409b36eb81557cd40bb83555157a390aa144d7827dbb6bfdbd62dd5228289513
+2026-11-26T06:32:02.833Z [tenant:config:import apply] file: /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/firefly-config-export.json  sha256 409b36eb81557cd40bb83555157a390aa144d7827dbb6bfdbd62dd5228289513
+2026-11-26T06:32:02.834Z [tenant:config:import apply] export of "Firefly Early Learning" (local, 2026-11-26T06:31:11.690Z): {"sites":3,"rooms":17,"household_role_types":6,"enrollment_process":1}
+2026-11-26T06:32:02.835Z [tenant:config:import apply] target: local http://127.0.0.1:50513
+2026-11-26T06:32:02.845Z [tenant:config:import apply] org: 9d471491-ff8b-483c-86e9-049d8a0fae49|active|Firefly Early Learning (firefly-early-learning)
+2026-11-26T06:32:02.853Z [tenant:config:import apply] plan (27 item(s)):
+2026-11-26T06:32:02.853Z [tenant:config:import apply]   create          site:north-campus                        site "North Campus"
+2026-11-26T06:32:02.853Z [tenant:config:import apply]   create          site:south-campus                        site "South Campus"
+2026-11-26T06:32:02.853Z [tenant:config:import apply]   create          site:west-campus                         site "West Campus"
+2026-11-26T06:32:02.853Z [tenant:config:import apply]   create          room:south-campus/bears                  room "Bears" at South Campus
+2026-11-26T06:32:02.853Z [tenant:config:import apply]   create          room:south-campus/giraffe                room "Giraffe" at South Campus
+2026-11-26T06:32:02.853Z [tenant:config:import apply]   create          room:north-campus/infant-a               room "Infant A" at North Campus
+2026-11-26T06:32:02.853Z [tenant:config:import apply]   create          room:west-campus/infant-a                room "Infant A" at West Campus
+2026-11-26T06:32:02.853Z [tenant:config:import apply]   create          room:north-campus/infant-b               room "Infant B" at North Campus
+2026-11-26T06:32:02.853Z [tenant:config:import apply]   create          room:west-campus/infant-b                room "Infant B" at West Campus
+2026-11-26T06:32:02.853Z [tenant:config:import apply]   create          room:south-campus/monkeys                room "Monkeys" at South Campus
+2026-11-26T06:32:02.853Z [tenant:config:import apply]   create          room:north-campus/pre-k                  room "Pre-K" at North Campus
+2026-11-26T06:32:02.853Z [tenant:config:import apply]   create          room:west-campus/preschool               room "Preschool" at West Campus
+2026-11-26T06:32:02.854Z [tenant:config:import apply]   create          room:north-campus/preschool-1            room "Preschool 1" at North Campus
+2026-11-26T06:32:02.854Z [tenant:config:import apply]   create          room:north-campus/preschool-2            room "Preschool 2" at North Campus
+2026-11-26T06:32:02.854Z [tenant:config:import apply]   create          room:south-campus/tigers                 room "Tigers" at South Campus
+2026-11-26T06:32:02.854Z [tenant:config:import apply]   create          room:north-campus/toddler-1              room "Toddler 1" at North Campus
+2026-11-26T06:32:02.854Z [tenant:config:import apply]   create          room:west-campus/toddler-1               room "Toddler 1" at West Campus
+2026-11-26T06:32:02.854Z [tenant:config:import apply]   create          room:north-campus/toddler-2              room "Toddler 2" at North Campus
+2026-11-26T06:32:02.854Z [tenant:config:import apply]   create          room:west-campus/toddler-2               room "Toddler 2" at West Campus
+2026-11-26T06:32:02.854Z [tenant:config:import apply]   create          room:south-campus/zebras                 room "Zebras" at South Campus
+2026-11-26T06:32:02.854Z [tenant:config:import apply]   create          role_type:child                          role type child
+2026-11-26T06:32:02.854Z [tenant:config:import apply]   create          role_type:parent                         role type parent
+2026-11-26T06:32:02.854Z [tenant:config:import apply]   create          role_type:guardian                       role type guardian
+2026-11-26T06:32:02.854Z [tenant:config:import apply]   create          role_type:emergency_contact              role type emergency_contact
+2026-11-26T06:32:02.854Z [tenant:config:import apply]   create          role_type:authorized_pickup              role type authorized_pickup
+2026-11-26T06:32:02.854Z [tenant:config:import apply]   create          role_type:payer                          role type payer
+2026-11-26T06:32:02.854Z [tenant:config:import apply]   create          process:lead_management/enrollment       department lead_management "Enrollment", publish process enrollment (8 stages), derive work units
+2026-11-26T06:32:02.854Z [tenant:config:import apply] summary: 27 to create, 0 to complete, 0 already present, 0 present but different (left unchanged)
+2026-11-26T06:32:02.855Z [tenant:config:import apply] confirmed: "9d471491"
+2026-11-26T06:32:02.867Z [tenant:config:import apply]   written site:north-campus
+2026-11-26T06:32:02.876Z [tenant:config:import apply]   written site:south-campus
+2026-11-26T06:32:02.887Z [tenant:config:import apply]   written site:west-campus
+2026-11-26T06:32:02.898Z [tenant:config:import apply]   written room:south-campus/bears
+2026-11-26T06:32:02.904Z [tenant:config:import apply]   written room:south-campus/giraffe
+2026-11-26T06:32:02.912Z [tenant:config:import apply]   written room:north-campus/infant-a
+2026-11-26T06:32:02.920Z [tenant:config:import apply]   written room:west-campus/infant-a
+2026-11-26T06:32:02.926Z [tenant:config:import apply]   written room:north-campus/infant-b
+2026-11-26T06:32:02.934Z [tenant:config:import apply]   written room:west-campus/infant-b
+2026-11-26T06:32:02.942Z [tenant:config:import apply]   written room:south-campus/monkeys
+2026-11-26T06:32:02.949Z [tenant:config:import apply]   written room:north-campus/pre-k
+2026-11-26T06:32:02.956Z [tenant:config:import apply]   written room:west-campus/preschool
+2026-11-26T06:32:02.962Z [tenant:config:import apply]   written room:north-campus/preschool-1
+2026-11-26T06:32:02.968Z [tenant:config:import apply]   written room:north-campus/preschool-2
+2026-11-26T06:32:02.975Z [tenant:config:import apply]   written room:south-campus/tigers
+2026-11-26T06:32:02.983Z [tenant:config:import apply]   written room:north-campus/toddler-1
+2026-11-26T06:32:02.988Z [tenant:config:import apply]   written room:west-campus/toddler-1
+2026-11-26T06:32:02.994Z [tenant:config:import apply]   written room:north-campus/toddler-2
+2026-11-26T06:32:03.002Z [tenant:config:import apply]   written room:west-campus/toddler-2
+2026-11-26T06:32:03.008Z [tenant:config:import apply]   written room:south-campus/zebras
+2026-11-26T06:32:03.013Z [tenant:config:import apply]   written role_type:child
+2026-11-26T06:32:03.016Z [tenant:config:import apply]   written role_type:parent
+2026-11-26T06:32:03.019Z [tenant:config:import apply]   written role_type:guardian
+2026-11-26T06:32:03.023Z [tenant:config:import apply]   written role_type:emergency_contact
+2026-11-26T06:32:03.026Z [tenant:config:import apply]   written role_type:authorized_pickup
+2026-11-26T06:32:03.029Z [tenant:config:import apply]   written role_type:payer
+2026-11-26T06:32:03.098Z [tenant:config:import apply]     published revision 1 (d23d92a9-abfc-4db5-b908-958c54fdeb3e)
+2026-11-26T06:32:03.120Z [tenant:config:import apply]     opportunity drawer override: provisioned
+2026-11-26T06:32:03.120Z [tenant:config:import apply]     work units: the export names no lane work units; none derived
+2026-11-26T06:32:03.120Z [tenant:config:import apply]   written process:lead_management/enrollment
+2026-11-26T06:32:03.120Z [tenant:config:import apply] ✓ wrote 27 item(s); run verify next
+2026-11-26T06:32:03.758Z [tenant:config:import verify] started: tenant:config:import verify verify --target local --supabase-url http://127.0.0.1:50513 --org-id 9d471491-ff8b-483c-86e9-049d8a0fae49 --admin-user-id b7bec213-bfd0-429f-ae76-a476ea380bde --log /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/step16-retry-import.log --file /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/firefly-config-export.json --expect-sha256 409b36eb81557cd40bb83555157a390aa144d7827dbb6bfdbd62dd5228289513 --baseline /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/release/census-extras.txt --after-census /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/release/after-retry-census-extras.txt
+2026-11-26T06:32:03.759Z [tenant:config:import verify] file: /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/firefly-config-export.json  sha256 409b36eb81557cd40bb83555157a390aa144d7827dbb6bfdbd62dd5228289513
+2026-11-26T06:32:03.760Z [tenant:config:import verify] export of "Firefly Early Learning" (local, 2026-11-26T06:31:11.690Z): {"sites":3,"rooms":17,"household_role_types":6,"enrollment_process":1}
+2026-11-26T06:32:03.762Z [tenant:config:import verify] target: local http://127.0.0.1:50513
+2026-11-26T06:32:03.771Z [tenant:config:import verify] org: 9d471491-ff8b-483c-86e9-049d8a0fae49|active|Firefly Early Learning (firefly-early-learning)
+2026-11-26T06:32:03.774Z [tenant:config:import verify] release config: /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/scripts/release/release-config.json; baseline: /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/release/census-extras.txt
+2026-11-26T06:32:04.109Z [tenant:config:import verify] PASS  config_present               27 item(s) present and equal
+2026-11-26T06:32:04.109Z [tenant:config:import verify] PASS  work_units:lead_management   0 lane work unit(s) active
+2026-11-26T06:32:04.109Z [tenant:config:import verify] PASS  baseline_counts              92 table(s) at their baseline
+2026-11-26T06:32:04.109Z [tenant:config:import verify] PASS  import_write_set             business_process_drafts 0 → 1; business_process_revisions 0 → 1; configuration_publications 0 → 1; customer_person_role_types 0 → 6; departments 0 → 1; document_categories 10 → 20; document_type_versions 13 → 26; document_types 13 → 26; field_definitions 0 → 9; field_section_definitions 0 → 1; locations 0 → 20; option_set_items 0 → 10; option_sets 0 → 1; orgs 1 → 2; record_drawer_layouts 0 → 1; role_definitions 6 → 10; role_permission_grants 158 → 318; user_access_profiles 0 → 1; user_roles 0 → 1; workflow_events 0 → 1
+2026-11-26T06:32:04.109Z [tenant:config:import verify] PASS  census_write_set             20 table(s) moved, all in the write set
+2026-11-26T06:32:04.109Z [tenant:config:import verify] PASS  orgs                         6b338219-44f7-47d4-8c87-e499fbf57480|retired|_w17_selftest_6b338219; 9d471491-ff8b-483c-86e9-049d8a0fae49|active|Firefly Early Learning
+2026-11-26T06:32:04.109Z [tenant:config:import verify] PASS  no_seed_ids                  no f17e0000-… id in any table the import writes
+2026-11-26T06:32:04.109Z [tenant:config:import verify] PASS  memberships                  b7bec213-bfd0-429f-ae76-a476ea380bde|admin
+2026-11-26T06:32:04.109Z [tenant:config:import verify] PASS  auth_users                   1 user(s): b7bec213-bfd0-429f-ae76-a476ea380bde
+2026-11-26T06:32:04.109Z [tenant:config:import verify] ✓ all 9 checks passed
+2026-11-26T06:32:04.679Z [tenant:config:import apply] started: tenant:config:import apply apply --target local --supabase-url http://127.0.0.1:50513 --org-id 9d471491-ff8b-483c-86e9-049d8a0fae49 --admin-user-id b7bec213-bfd0-429f-ae76-a476ea380bde --log /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/step16-retry-import.log --file /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/firefly-config-export.json --expect-sha256 409b36eb81557cd40bb83555157a390aa144d7827dbb6bfdbd62dd5228289513
+2026-11-26T06:32:04.681Z [tenant:config:import apply] file: /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/firefly-config-export.json  sha256 409b36eb81557cd40bb83555157a390aa144d7827dbb6bfdbd62dd5228289513
+2026-11-26T06:32:04.682Z [tenant:config:import apply] export of "Firefly Early Learning" (local, 2026-11-26T06:31:11.690Z): {"sites":3,"rooms":17,"household_role_types":6,"enrollment_process":1}
+2026-11-26T06:32:04.683Z [tenant:config:import apply] target: local http://127.0.0.1:50513
+2026-11-26T06:32:04.693Z [tenant:config:import apply] org: 9d471491-ff8b-483c-86e9-049d8a0fae49|active|Firefly Early Learning (firefly-early-learning)
+2026-11-26T06:32:04.715Z [tenant:config:import apply] plan (27 item(s)):
+2026-11-26T06:32:04.715Z [tenant:config:import apply]   present         site:north-campus                        site "North Campus"
+2026-11-26T06:32:04.715Z [tenant:config:import apply]   present         site:south-campus                        site "South Campus"
+2026-11-26T06:32:04.715Z [tenant:config:import apply]   present         site:west-campus                         site "West Campus"
+2026-11-26T06:32:04.715Z [tenant:config:import apply]   present         room:south-campus/bears                  room "Bears"
+2026-11-26T06:32:04.715Z [tenant:config:import apply]   present         room:south-campus/giraffe                room "Giraffe"
+2026-11-26T06:32:04.715Z [tenant:config:import apply]   present         room:north-campus/infant-a               room "Infant A"
+2026-11-26T06:32:04.715Z [tenant:config:import apply]   present         room:west-campus/infant-a                room "Infant A"
+2026-11-26T06:32:04.715Z [tenant:config:import apply]   present         room:north-campus/infant-b               room "Infant B"
+2026-11-26T06:32:04.715Z [tenant:config:import apply]   present         room:west-campus/infant-b                room "Infant B"
+2026-11-26T06:32:04.715Z [tenant:config:import apply]   present         room:south-campus/monkeys                room "Monkeys"
+2026-11-26T06:32:04.715Z [tenant:config:import apply]   present         room:north-campus/pre-k                  room "Pre-K"
+2026-11-26T06:32:04.716Z [tenant:config:import apply]   present         room:west-campus/preschool               room "Preschool"
+2026-11-26T06:32:04.716Z [tenant:config:import apply]   present         room:north-campus/preschool-1            room "Preschool 1"
+2026-11-26T06:32:04.716Z [tenant:config:import apply]   present         room:north-campus/preschool-2            room "Preschool 2"
+2026-11-26T06:32:04.716Z [tenant:config:import apply]   present         room:south-campus/tigers                 room "Tigers"
+2026-11-26T06:32:04.716Z [tenant:config:import apply]   present         room:north-campus/toddler-1              room "Toddler 1"
+2026-11-26T06:32:04.716Z [tenant:config:import apply]   present         room:west-campus/toddler-1               room "Toddler 1"
+2026-11-26T06:32:04.716Z [tenant:config:import apply]   present         room:north-campus/toddler-2              room "Toddler 2"
+2026-11-26T06:32:04.716Z [tenant:config:import apply]   present         room:west-campus/toddler-2               room "Toddler 2"
+2026-11-26T06:32:04.716Z [tenant:config:import apply]   present         room:south-campus/zebras                 room "Zebras"
+2026-11-26T06:32:04.716Z [tenant:config:import apply]   present         role_type:child                          role type child
+2026-11-26T06:32:04.716Z [tenant:config:import apply]   present         role_type:parent                         role type parent
+2026-11-26T06:32:04.716Z [tenant:config:import apply]   present         role_type:guardian                       role type guardian
+2026-11-26T06:32:04.716Z [tenant:config:import apply]   present         role_type:emergency_contact              role type emergency_contact
+2026-11-26T06:32:04.716Z [tenant:config:import apply]   present         role_type:authorized_pickup              role type authorized_pickup
+2026-11-26T06:32:04.716Z [tenant:config:import apply]   present         role_type:payer                          role type payer
+2026-11-26T06:32:04.716Z [tenant:config:import apply]   present         process:lead_management/enrollment       department lead_management: the published process equals the export
+2026-11-26T06:32:04.716Z [tenant:config:import apply] summary: 0 to create, 0 to complete, 27 already present, 0 present but different (left unchanged)
+2026-11-26T06:32:04.716Z [tenant:config:import apply] nothing to write: every item is already present (no-op)

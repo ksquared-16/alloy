@@ -1,0 +1,3 @@
+rehearsal containers (label alloy.purpose=p6-release-rehearsal) after run: 0
+fixture repositories left in $TMPDIR: 0
+no supabase CLI invoked; the only container started carried the p6 label and --network none

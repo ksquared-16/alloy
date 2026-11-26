@@ -1,0 +1,14 @@
+## A-after-chain: orgs whose slug starts with _w17_selftest_
+8d2dec91-d59f-4c03-9976-6ce0ba901564 | name=_w17_selftest_8d2dec91 | slug=_w17_selftest_8d2dec91 | status=retired
+## A-after-chain: all orgs
+1
+## A-after-chain: rows owned by the W-17 org(s), per org-scoped public table (non-zero only)
+DO
+document_categories 10
+document_type_versions 13
+document_types 13
+mutation_events 4
+role_definitions 6
+role_permission_grants 158
+## A-after-chain: ledger
+558 rows, head 20261223090000

@@ -1,0 +1,18 @@
+# classifyMigrationSql over every file in supabase/migrations: b8b3926ff's classifier (old) vs the DO-block fix (new).
+# 'was [...]' is the old destructive list. No file moved contract->expand; no idempotency warning changed.
+files=556 contract old=32 new=45; expand->contract 13; other changes 1; idempotency-warning changes 0
+20260430216000_childcare_org_delete_cleaning_location_field_definitions.sql [delete rows] was []
+20260912010000_w17_additive_role_assignment.sql [delete rows] was []
+20260912030000_forms_capability_default_seed.sql [delete rows] was []
+20260912114000_processing_capability_default_seed.sql [delete rows] was []
+20260914114000_scheduling_jobs_default_seed.sql [delete rows] was []
+20260914184000_configuration_authority_default_seed.sql [delete rows] was []
+20260915091000_business_process_authority_default_seed.sql [delete rows] was []
+20260915130000_w18_delegation_ceiling.sql [delete rows] was []
+20260915170000_governed_capability_recovery_floor.sql [delete rows] was []
+20261004120000_payment_autopay_arrangements.sql [delete rows] was []
+20261104120000_org_parameterized_rpc_execute_boundary.sql [delete rows] was []
+20261107120000_unchecked_mutating_rpc_execute_boundary.sql [delete rows] was []
+20261205090000_remove_member_access_clears_profile.sql [delete rows] was []
+OTHER:
+labels 20260702000003_program_offering_variants.sql: drop column,set not null -> drop column,delete rows,set not null

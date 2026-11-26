@@ -1,0 +1,7 @@
+{
+  "ok": false,
+  "step": "production.preflight",
+  "failures": [
+    "first promotion: the config names no production.previous_supabase_project_ref; use the release-directory copy (alloy-release first-promotion-config)"
+  ]
+}

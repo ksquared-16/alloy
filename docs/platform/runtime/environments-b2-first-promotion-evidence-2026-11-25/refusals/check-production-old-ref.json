@@ -1,0 +1,6 @@
+{
+  "ok": false,
+  "failures": [
+    "production: wired to Supabase project vslwnntzzgpnmrpjipat, expected rehearsalnewprojectr"
+  ]
+}

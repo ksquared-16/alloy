@@ -1,0 +1,4 @@
+vercel-cron GET, no Authorization (CRON_SECRET unset, so Vercel sends none): HTTP 401
+vercel-cron GET, Authorization: Bearer <any> with CRON_SECRET unset: HTTP 401
+POST, x-cron-token wrong: HTTP 401
+clock unchanged by the refused calls: 1|2026-11-26 07:30:00.118077+00

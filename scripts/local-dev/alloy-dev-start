@@ -102,17 +102,22 @@ main() {
   # Director-facing HTTPS origin is unchanged. Next 16 takes this as a CLI flag
   # only — it reads no HOSTNAME env var — so it has to be appended to the
   # command rather than exported beside it.
-  local bind_host="${ALLOY_DEV_BIND_HOST:-127.0.0.1}"
-  if [[ -n "$bind_host" && "$server_command" != *" -H "* && "$server_command" != *"--hostname"* ]]; then
-    case "$server_command" in
-      npm\ run\ *) server_command="${server_command} -- -H ${bind_host}" ;;
-      *next\ dev*)  server_command="${server_command} -H ${bind_host}" ;;
-    esac
-  fi
+  #
+  # The production command is chosen FIRST so the bind applies to it too: it used
+  # to replace the command after `-H` was appended, so `next start` bound every
+  # interface — the exact collision above — and a production preview could die
+  # after its Serve route was published, leaving the tailnet port answering 502.
   if [[ "$mode" == "production" ]]; then
     mode_label="Production"
     server_command="${ALLOY_PROD_COMMAND:-npm run start}"
     [[ -d "${web_dir}/.next" ]] || alloy_die "production build missing: ${web_dir}/.next — build first (production start never builds implicitly)"
+  fi
+  local bind_host="${ALLOY_DEV_BIND_HOST:-127.0.0.1}"
+  if [[ -n "$bind_host" && "$server_command" != *" -H "* && "$server_command" != *"--hostname"* ]]; then
+    case "$server_command" in
+      npm\ run\ *) server_command="${server_command} -- -H ${bind_host}" ;;
+      *next\ dev*|*next\ start*) server_command="${server_command} -H ${bind_host}" ;;
+    esac
   fi
 
   if [[ -f "$pid_path" ]]; then

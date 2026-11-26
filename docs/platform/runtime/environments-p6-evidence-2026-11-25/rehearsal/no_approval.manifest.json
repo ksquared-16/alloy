@@ -1,0 +1,62 @@
+{
+  "schema": "alloy.release-manifest/v1",
+  "environment": "rehearsal",
+  "created_at": "2026-11-26T01:27:17.174Z",
+  "candidate": {
+    "sha": "20284a3234a85f0826e6e4e0e688775ac0d81f59",
+    "tree": "3a2879f8d822a7da457859c9cc08967544a7305c",
+    "staging_sha": "20284a3234a85f0826e6e4e0e688775ac0d81f59",
+    "production_before_sha": "2ce39bb963d36c6057fe38fd64ed30abba2bfe66",
+    "fast_forward": true,
+    "commits_ahead_of_main": 1,
+    "tree_diff_from_staging": []
+  },
+  "migrations": {
+    "candidate_count": 4,
+    "candidate_head": "20270201000100",
+    "production_ledger_head": "20270101000100",
+    "pending": [
+      {
+        "version": "20270201000000",
+        "name": "people_email",
+        "file": "20270201000000_people_email.sql",
+        "blob": "9672f0e22fac5c424b5004d08036dba81c2f01fe",
+        "class": "expand",
+        "destructive": [],
+        "idempotency_warnings": []
+      },
+      {
+        "version": "20270201000100",
+        "name": "people_email_index",
+        "file": "20270201000100_people_email_index.sql",
+        "blob": "63368f191fdfdf206f8ce684e6bfac275d4a1bef",
+        "class": "expand",
+        "destructive": [],
+        "idempotency_warnings": []
+      }
+    ],
+    "expand": [
+      "20270201000000",
+      "20270201000100"
+    ],
+    "contract": [],
+    "warnings": []
+  },
+  "staging_verification_sha256": "670b966ce92467e248713b9e374a33d15b8cc69a8f6564ae00e2b4fdc86224e4",
+  "staging_verified_at": "2026-11-26T01:27:17.024Z",
+  "production_ledger_sha256": "476efddf9659990eac0c68bacc4ef4f44c14226956c4f63c6b72b9379a331cb8",
+  "expected_fingerprint": {
+    "columns_md5": "3039a8e72e1e0c31c0b24a0d599d761c",
+    "policies_md5": "d41d8cd98f00b204e9800998ecf8427e",
+    "functions_md5": "d41d8cd98f00b204e9800998ecf8427e",
+    "indexes_md5": "8d6d0f5a5e9d6cbc62bf180a23efc058",
+    "tables": "2",
+    "rls_disabled": "0"
+  },
+  "candidate_versions": [
+    "20270101000000",
+    "20270101000100",
+    "20270201000000",
+    "20270201000100"
+  ]
+}

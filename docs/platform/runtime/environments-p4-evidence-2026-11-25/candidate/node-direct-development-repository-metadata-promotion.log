@@ -1,0 +1,23 @@
+ok  - 1 — a workflow-only candidate is eligible
+ok  - 2 — a candidate touching web/** is REFUSED, and named
+ok  - 3 — a candidate carrying a migration is REFUSED
+ok  - 3a — the mixed candidate is refused WHOLE, never trimmed to its good files
+ok  - 4 — an undeclared candidate is REFUSED
+ok  - 5 — a foreign commit in the candidate is REFUSED, and named
+ok  - 5a — a declared commit absent from the candidate is REFUSED
+ok  - 5b — an unresolvable baseline is REFUSED, not skipped
+ok  - 5c — a changed file that was not declared is REFUSED
+ok  - 5d — a declared file the candidate does not change is REFUSED
+ok  - 9 — the default branch stays main and this class writes only main
+ok  - 10 — ordinary product promotion still refuses main
+ok  - 11 — the allowlist starts at exactly one prefix
+ok  - 7 — Tier 2 names the ref it tests instead of inheriting the default branch
+ok  - 8 — the run records the definition SHA and the tested SHA separately
+ok  - 12 — the destination is RESOLVED, never a bare ref that a local branch can shadow
+ok  - 12a — an unresolvable destination REFUSES rather than falling back to a name
+ok  - 12b — a verified destination SHA from the executor wins over any ref lookup
+ok  - 13 — validating the normalized output reproduces it, field for field
+ok  - 13a — a refusal survives normalization too
+
+# pass 20
+# fail 0

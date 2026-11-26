@@ -1,0 +1,8 @@
+step 12 read-back: http://wake-relay:8080/api/scheduled-work/wake
+step 13: credential rows: 1
+clock before: wake_count=0 responses=0 (UTC now 07:28:24)
+clock after: wake_count|last_wake_at = 1|2026-11-26 07:30:00.118077+00 (waited 102s)
+net._http_response (newest): 200 - {"ok":true,"workerId":"worker-fa7e2720","claimed":1,"completed":1,"retryScheduled":0,"terminallyFailed":0,"unregisteredH
+cron.job_run_details (newest): succeeded 2026-11-26 07:30:00.012764+00
+harness saw: {"at":"2026-11-26T07:30:00.141Z","method":"POST","path":"/api/scheduled-work/wake","authorization":"bearer","x_cron_token":"present","status":200}
+no staging target: every response is the production stand-in's route (non-2xx responses: 0)

@@ -1,0 +1,9 @@
+BEGIN
+SET
+              set_config              |  set_config   
+--------------------------------------+---------------
+ 5ad76c7c-fd07-40c1-9c01-bc28f7a9ece8 | Firefly Early
+(1 row)
+
+psql:<stdin>:105: ERROR:  rollback refused (org_name_mismatch): org 5ad76c7c-fd07-40c1-9c01-bc28f7a9ece8 is named "Firefly Early Learning", not "Firefly Early"
+CONTEXT:  PL/pgSQL function inline_code_block line 18 at RAISE

@@ -1,0 +1,4 @@
+identify-routine exit=1
+identify-p4 exit=0
+plan-unknown exit=1
+plan-hypothesis exit=1

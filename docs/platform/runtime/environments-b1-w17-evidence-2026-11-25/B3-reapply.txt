@@ -1,0 +1,3 @@
+psql:/tmp/migrations/20261223090000_w17_selftest_org_retirement.sql:68: NOTICE:  W-17 retirement: 0 self-test org(s) retired now; none has a member.
+DO
+rc=0

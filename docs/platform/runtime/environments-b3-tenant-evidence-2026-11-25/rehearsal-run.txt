@@ -1,0 +1,129 @@
+## S: staging stand-in (scratch database in the shared cluster)
+source clone rc=0 orgs=133
+E2 seed apply rc=0 (42 PASS, 0 FAIL;    seed authors — campuses: true  enrollment: true  catalog: true  roles: true)
+## export (M8)
+export: local postgresql://postgres:***@127.0.0.1:54422/firefly_seed_scratch_b3_source  org 93667019-bd28-49b5-a688-acc9bb1e0a19
+  kinds: sites, rooms, household_role_types, enrollment_process
+  source org: Firefly Early Learning  (seed configuration kept: local only)
+  items: {"sites":3,"rooms":17,"household_role_types":6,"enrollment_process":1}
+  left behind: 0
+  metadata keys dropped: site:north-campus [seed]; site:south-campus [seed]; site:west-campus [seed]; room:south-campus/bears [seed]; room:south-campus/giraffe [seed]; room:north-campus/infant-a [seed]; room:west-campus/infant-a [seed]; room:north-campus/infant-b [seed]; room:west-campus/infant-b [seed]; room:south-campus/monkeys [seed]; room:north-campus/pre-k [seed]; room:west-campus/preschool [seed]; room:north-campus/preschool-1 [seed]; room:north-campus/preschool-2 [seed]; room:south-campus/tigers [seed]; room:north-campus/toddler-1 [seed]; room:west-campus/toddler-1 [seed]; room:north-campus/toddler-2 [seed]; room:west-campus/toddler-2 [seed]; room:south-campus/zebras [seed]
+✓ wrote /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/firefly-config-export.json
+  sha256 409b36eb81557cd40bb83555157a390aa144d7827dbb6bfdbd62dd5228289513
+export sha256 409b36eb81557cd40bb83555157a390aa144d7827dbb6bfdbd62dd5228289513
+export --kinds with children, charge_templates, provider_bindings rc=4 (expected 4); file written: no
+export without --keep-seed-config rc=0 (expected 0, every seed row left behind): {"sites":0,"rooms":0,"household_role_types":0,"enrollment_process":0} left_behind 27
+export --target staging with no URL rc=3 (expected 3)
+export from the production project rc=3 (expected 3)
+export over an existing file rc=3 (expected 3)
+## N: new-project stand-in
+gotrue_migrate_rc=0
+storage_migrate_rc=0
+networks attached during the chain: []
+chain: 557 files applied, head 20261223090000_w17_selftest_org_retirement.sql
+step-9 stand-in orgs: 6b338219-44f7-47d4-8c87-e499fbf57480|retired|_w17_selftest_6b338219 
+served: rest 127.0.0.1:50508 auth 127.0.0.1:50509 api http://127.0.0.1:50513
+admin auth user: b7bec213-bfd0-429f-ae76-a476ea380bde (firefly-admin@b3-rehearsal.invalid)
+## M5: tenant:create
+create for an admin account with no name, no --admin-full-name rc=4 (expected 4; orgs now 1)
+create on staging rc=3 (expected 3)
+create on the previous production project rc=3 (expected 3)
+create on production without ALLOY_ENVIRONMENT rc=3 (expected 3)
+create with a mistyped --project-ref rc=3 (expected 3)
+create with the wrong admin email rc=4 (expected 4)
+  set the admin account's name (Auth user_metadata.full_name) to "Firefly Admin (B3 rehearsal)"
+  insert orgs: id d19afb68-ae0b-4ac2-8e12-61798f8a9dfc, name "Firefly Early Learning", slug firefly-early-learning, status active, industry childcare (b6f133c6-f2ec-46d1-9bb7-aa44c31dc4b1)
+  insert one admin membership for b7bec213-bfd0-429f-ae76-a476ea380bde (firefly-admin@b3-rehearsal.invalid) via create_membership_with_access_profile
+  provision the person-child relationship field configuration (sections, option sets, field definitions)
+  nothing else: no demo data, no records, no other users
+dry run: nothing was written
+create, confirmation mistyped rc=2 (expected 2)
+started: tenant:create --target local --supabase-url http://127.0.0.1:50513 --name Firefly Early Learning --slug firefly-early-learning --industry childcare --admin-user-id b7bec213-bfd0-429f-ae76-a476ea380bde --admin-email firefly-admin@b3-rehearsal.invalid --admin-full-name Firefly Admin (B3 rehearsal) --log /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/step16-tenant-create.log
+target: local http://127.0.0.1:50513
+orgs now (1):
+  6b338219-44f7-47d4-8c87-e499fbf57480|retired|_w17_selftest_6b338219
+admin b7bec213-bfd0-429f-ae76-a476ea380bde (firefly-admin@b3-rehearsal.invalid) holds 0 membership(s) today
+plan:
+  set the admin account's name (Auth user_metadata.full_name) to "Firefly Admin (B3 rehearsal)"
+  insert orgs: id 5ad76c7c-fd07-40c1-9c01-bc28f7a9ece8, name "Firefly Early Learning", slug firefly-early-learning, status active, industry childcare (b6f133c6-f2ec-46d1-9bb7-aa44c31dc4b1)
+  insert one admin membership for b7bec213-bfd0-429f-ae76-a476ea380bde (firefly-admin@b3-rehearsal.invalid) via create_membership_with_access_profile
+  provision the person-child relationship field configuration (sections, option sets, field definitions)
+  nothing else: no demo data, no records, no other users
+Create org "Firefly Early Learning" on local http://127.0.0.1:50513? Type "firefly-early-learning" to proceed: 
+confirmed: "firefly-early-learning"
+admin account named "Firefly Admin (B3 rehearsal)"
+created org 5ad76c7c-fd07-40c1-9c01-bc28f7a9ece8 slug firefly-early-learning
+memberships in the new org: b7bec213-bfd0-429f-ae76-a476ea380bde|admin
+ORG_ID=5ad76c7c-fd07-40c1-9c01-bc28f7a9ece8
+done
+new org: 5ad76c7c-fd07-40c1-9c01-bc28f7a9ece8
+create again rc=4 (expected 4)
+create with the same name, another slug rc=4 (expected 4)
+## M8: tenant:config:import
+  create          process:lead_management/enrollment       department lead_management "Enrollment", publish process enrollment (8 stages), derive work units
+summary: 27 to create, 0 to complete, 0 already present, 0 present but different (left unchanged)
+dry run: nothing was written
+    opportunity drawer override: provisioned
+    work units: the export names no lane work units; none derived
+  written process:lead_management/enrollment
+✓ wrote 27 item(s); run verify next
+started: tenant:config:import verify verify --target local --supabase-url http://127.0.0.1:50513 --org-id 5ad76c7c-fd07-40c1-9c01-bc28f7a9ece8 --admin-user-id b7bec213-bfd0-429f-ae76-a476ea380bde --log /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/step16-import.log --file /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/firefly-config-export.json --expect-sha256 409b36eb81557cd40bb83555157a390aa144d7827dbb6bfdbd62dd5228289513 --baseline /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/release/census-extras.txt --after-census /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/release/after-step16-census-extras.txt
+file: /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/firefly-config-export.json  sha256 409b36eb81557cd40bb83555157a390aa144d7827dbb6bfdbd62dd5228289513
+export of "Firefly Early Learning" (local, 2026-11-26T06:31:11.690Z): {"sites":3,"rooms":17,"household_role_types":6,"enrollment_process":1}
+target: local http://127.0.0.1:50513
+org: 5ad76c7c-fd07-40c1-9c01-bc28f7a9ece8|active|Firefly Early Learning (firefly-early-learning)
+release config: /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/scripts/release/release-config.json; baseline: /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/release/census-extras.txt
+PASS  config_present               27 item(s) present and equal
+PASS  work_units:lead_management   0 lane work unit(s) active
+PASS  baseline_counts              92 table(s) at their baseline
+PASS  import_write_set             business_process_drafts 0 → 1; business_process_revisions 0 → 1; configuration_publications 0 → 1; customer_person_role_types 0 → 6; departments 0 → 1; document_categories 10 → 20; document_type_versions 13 → 26; document_types 13 → 26; field_definitions 0 → 9; field_section_definitions 0 → 1; locations 0 → 20; option_set_items 0 → 10; option_sets 0 → 1; orgs 1 → 2; record_drawer_layouts 0 → 1; role_definitions 6 → 10; role_permission_grants 158 → 318; user_access_profiles 0 → 1; user_roles 0 → 1; workflow_events 0 → 1
+PASS  census_write_set             20 table(s) moved, all in the write set
+PASS  orgs                         5ad76c7c-fd07-40c1-9c01-bc28f7a9ece8|active|Firefly Early Learning; 6b338219-44f7-47d4-8c87-e499fbf57480|retired|_w17_selftest_6b338219
+PASS  no_seed_ids                  no f17e0000-… id in any table the import writes
+PASS  memberships                  b7bec213-bfd0-429f-ae76-a476ea380bde|admin
+PASS  auth_users                   1 user(s): b7bec213-bfd0-429f-ae76-a476ea380bde
+✓ all 9 checks passed
+verify rc=0
+summary: 0 to create, 0 to complete, 27 already present, 0 present but different (left unchanged)
+nothing to write: every item is already present (no-op)
+plan after: summary: 0 to create, 0 to complete, 27 already present, 0 present but different (left unchanged)
+import plan with-customers rc=4 (expected 4): kinds.customers: refused — household data (P3 L1); never carried (D7)
+import plan with-field rc=4 (expected 4): kinds.sites[0]: fields outside the allowlist: email
+import plan with-metadata rc=4 (expected 4): kinds.rooms[0].metadata: keys outside the allowlist: qa_run_id
+import plan with-id rc=4 (expected 4): kinds.sites[0]: carries an id (93667019-bd28-49b5-a688-acc9bb1e0a19); items are keyed by ref, never by source id
+import plan with-bindings rc=4 (expected 4): kinds.provider_bindings: refused — environment credentials: re-provisioned per environment, never transferred (P3 C15, B4; I-7)
+import with a file that is not the approved one rc=4 (expected 4)
+a seed-kept file aimed at production rc=4 (expected 4)
+the re-run and every refusal changed no row count
+orgs after step 16: 5ad76c7c-fd07-40c1-9c01-bc28f7a9ece8|active|Firefly Early Learning 6b338219-44f7-47d4-8c87-e499fbf57480|retired|_w17_selftest_6b338219 
+tables step 16 changed: 20
+## rollback (§7)
+rollback with the wrong org name rc=3 (expected 3): psql:<stdin>:105: ERROR:  rollback refused (org_name_mismatch): org 5ad76c7c-fd07-40c1-9c01-bc28f7a9ece8 is named "Firefly Early Learning", not "Firefly Early"
+rollback aimed at the W-17 org rc=3 (expected 3): psql:<stdin>:105: ERROR:  rollback refused (org_not_active): org 6b338219-44f7-47d4-8c87-e499fbf57480 is retired
+rollback with a customer written rc=3 (expected 3): psql:<stdin>:105: ERROR:  rollback refused (window_closed): customers holds 1 row(s) for the org; real records exist (briefing §7)
+the refused rollbacks changed nothing (beyond the probe's own customer row, written and removed)
+rollback rc=0 : removed org 5ad76c7c-fd07-40c1-9c01-bc28f7a9ece8 ("Firefly Early Learning") from 18 table(s) in 2 pass(es); 23 trigger(s) restored
+after the rollback the census equals step 9's: removal complete
+orgs equal step 9's: 6b338219-44f7-47d4-8c87-e499fbf57480|retired|_w17_selftest_6b338219 
+auth users kept for the retry: 1
+## step 16 again, on the same project
+create again after the rollback rc=0
+new org: 9d471491-ff8b-483c-86e9-049d8a0fae49
+plan with lane work units rc=0:  blocked process:lead_management/enrollment the org has no opportunity statuses assigned to the stages of lifecycle_wu_closed, lifecycle_wu_closed_withdrawn, li
+apply with lane work units rc=4 (expected 4): ✗ refused (blocked): the items above cannot be completed in this org; nothing was written
+the blocked apply wrote nothing
+retry import (the reviewed file) rc=0: ✓ wrote 27 item(s); run verify next
+retry verify rc=0
+PASS  config_present               27 item(s) present and equal
+PASS  work_units:lead_management   0 lane work unit(s) active
+PASS  baseline_counts              92 table(s) at their baseline
+PASS  import_write_set             business_process_drafts 0 → 1; business_process_revisions 0 → 1; configuration_publications 0 → 1; 
+PASS  census_write_set             20 table(s) moved, all in the write set
+PASS  orgs                         6b338219-44f7-47d4-8c87-e499fbf57480|retired|_w17_selftest_6b338219; 9d471491-ff8b-483c-86e9-049d8a0fae49
+PASS  no_seed_ids                  no f17e0000-… id in any table the import writes
+PASS  memberships                  b7bec213-bfd0-429f-ae76-a476ea380bde|admin
+PASS  auth_users                   1 user(s): b7bec213-bfd0-429f-ae76-a476ea380bde
+retry import again rc=0: nothing to write: every item is already present (no-op)
+orgs at the end: 6b338219-44f7-47d4-8c87-e499fbf57480|retired|_w17_selftest_6b338219 9d471491-ff8b-483c-86e9-049d8a0fae49|active|Firefly Early Learning 
+teardown: containers=[] networks=[] scratch_db=[]
+EXIT 0

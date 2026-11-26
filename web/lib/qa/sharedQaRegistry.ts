@@ -9,7 +9,10 @@
 export const QA_HOSTED_PROJECT_REF = "ikaxilmwmrmbagoidedu";
 export const QA_PRODUCTION_PROJECT_REF = "vslwnntzzgpnmrpjipat";
 
-/** Firefly Early Learning — certified operating tenant; never a QA target. */
+/**
+ * Firefly Early Learning — certified operating tenant; never a shared-QA plan target; the managed slot
+ * identities' staging org (ALY-14 E3, owner decision (a), 2026-11-25).
+ */
 export const FORBIDDEN_QA_ORG_IDS = Object.freeze([
   "93667019-bd28-49b5-a688-acc9bb1e0a19",
 ] as const);

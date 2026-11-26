@@ -1,0 +1,19 @@
+{
+  "ok": false,
+  "failures": [
+    "candidate tree differs from staging's outside the allowed paths: .github/workflows/vacilando-tier2.yml"
+  ],
+  "candidate": {
+    "sha": "ea06c21f3401527a7374febef2156dba9121ee3e",
+    "tree": "d24317165163ebf5a659d7c94af7539563052412",
+    "staging_sha": "8321949771f7fb6b2f04de6feb1fdd6ccb8e1484",
+    "production_before_sha": "bbfbec76d7795cc3392b0c61e1c8ce829adaf9d2",
+    "fast_forward": true,
+    "commits_ahead_of_main": 7784,
+    "tree_diff_from_staging": [
+      ".github/workflows/vacilando-tier2.yml"
+    ]
+  },
+  "migrations": 557,
+  "baseline_migrations": 229
+}

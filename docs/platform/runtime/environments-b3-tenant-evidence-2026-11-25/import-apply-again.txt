@@ -1,0 +1,35 @@
+started: tenant:config:import apply apply --target local --supabase-url http://127.0.0.1:50513 --org-id 5ad76c7c-fd07-40c1-9c01-bc28f7a9ece8 --admin-user-id b7bec213-bfd0-429f-ae76-a476ea380bde --log /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/step16-import.log --file /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/firefly-config-export.json --expect-sha256 409b36eb81557cd40bb83555157a390aa144d7827dbb6bfdbd62dd5228289513
+file: /Users/vacilando/Code/alloy-worktrees/environments-and-promotion/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/firefly-config-export.json  sha256 409b36eb81557cd40bb83555157a390aa144d7827dbb6bfdbd62dd5228289513
+export of "Firefly Early Learning" (local, 2026-11-26T06:31:11.690Z): {"sites":3,"rooms":17,"household_role_types":6,"enrollment_process":1}
+target: local http://127.0.0.1:50513
+org: 5ad76c7c-fd07-40c1-9c01-bc28f7a9ece8|active|Firefly Early Learning (firefly-early-learning)
+plan (27 item(s)):
+  present         site:north-campus                        site "North Campus"
+  present         site:south-campus                        site "South Campus"
+  present         site:west-campus                         site "West Campus"
+  present         room:south-campus/bears                  room "Bears"
+  present         room:south-campus/giraffe                room "Giraffe"
+  present         room:north-campus/infant-a               room "Infant A"
+  present         room:west-campus/infant-a                room "Infant A"
+  present         room:north-campus/infant-b               room "Infant B"
+  present         room:west-campus/infant-b                room "Infant B"
+  present         room:south-campus/monkeys                room "Monkeys"
+  present         room:north-campus/pre-k                  room "Pre-K"
+  present         room:west-campus/preschool               room "Preschool"
+  present         room:north-campus/preschool-1            room "Preschool 1"
+  present         room:north-campus/preschool-2            room "Preschool 2"
+  present         room:south-campus/tigers                 room "Tigers"
+  present         room:north-campus/toddler-1              room "Toddler 1"
+  present         room:west-campus/toddler-1               room "Toddler 1"
+  present         room:north-campus/toddler-2              room "Toddler 2"
+  present         room:west-campus/toddler-2               room "Toddler 2"
+  present         room:south-campus/zebras                 room "Zebras"
+  present         role_type:child                          role type child
+  present         role_type:parent                         role type parent
+  present         role_type:guardian                       role type guardian
+  present         role_type:emergency_contact              role type emergency_contact
+  present         role_type:authorized_pickup              role type authorized_pickup
+  present         role_type:payer                          role type payer
+  present         process:lead_management/enrollment       department lead_management: the published process equals the export
+summary: 0 to create, 0 to complete, 27 already present, 0 present but different (left unchanged)
+nothing to write: every item is already present (no-op)
