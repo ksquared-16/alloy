@@ -20,7 +20,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import { RELEASE_SCOPES, verifyAuditChain } from "../release-lib.mjs";
-import { ORG_ROWS, ThrowawayPostgres, dockerAvailable, runRehearsalScenario } from "../release-rehearsal.mjs";
+import { FIXTURE_BASE_MIGRATIONS, ORG_ROWS, ThrowawayPostgres, dockerAvailable, runRehearsalScenario } from "../release-rehearsal.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const baseConfig = JSON.parse(readFileSync(join(HERE, "..", "release-config.json"), "utf8"));
@@ -198,6 +198,130 @@ test("preflight: a destructive migration before an additive one blocks the relea
     assert.equal(r.prep.step, "production.preflight");
     assert.match(r.prep.failures.join(" "), /contract_not_last/);
     unchanged(r);
+});
+
+// --- first-promotion mode (briefing D9): a NEW, empty project receives the whole chain --------
+
+const FP_RELEASE = {
+    // A destructive file ahead of additive ones: a routine release blocks this (contract_not_last).
+    "20270201000000_drop_full_name.sql": "alter table public.people drop column if exists full_name;\n",
+    "20270201000100_people_email.sql": "alter table public.people add column if not exists email text;\n",
+    // The W-17 shape: the chain itself creates one org, retired (D10).
+    "20270201000200_w17_selftest_retired.sql": "insert into public.orgs (id, name, status) values ('99999999-0000-4000-8000-000000000017', '_w17_selftest_0bbaad43', 'retired') on conflict (id) do nothing;\n",
+};
+// The census checks these three for real (postgres:17-alpine ships them); see rehearsalAdapters for the other four.
+const FP_BASE = { ...FIXTURE_BASE_MIGRATIONS, "20270101000050_extensions.sql": "create extension if not exists btree_gist;\ncreate extension if not exists pgcrypto;\ncreate extension if not exists \"uuid-ossp\";\n" };
+const FP_ALL = ["20270101000000", "20270101000050", "20270101000100", "20270201000000", "20270201000100", "20270201000200"];
+const runFirst = (name, opts = {}) => run(name, { firstPromotion: true, base: FP_BASE, release: FP_RELEASE, ...opts });
+const untouched = (r) => {
+    assert.equal(r.after.buildInfo.gitSha, r.fixture.mainSha, "production still serves the previous build");
+    assert.equal(r.after.buildInfo.supabaseProjectRef, "rehearsalproductionrf", "…on the previous project");
+    assert.equal(r.after.main, r.fixture.mainSha, "main not moved");
+};
+
+test("first promotion: an empty project receives the whole chain in version order, census before deploy, then verifies on the new ref", async () => {
+    const r = await runFirst("fp_happy");
+    assert.equal(r.prep.ok, true, JSON.stringify(r.prep.failures));
+    assert.deepEqual(r.before.ledger, [], "no ledger table at all on the new project");
+    assert.equal(r.prep.manifest.mode, "first_promotion");
+    assert.deepEqual(r.prep.manifest.migrations.expand, FP_ALL);
+    assert.deepEqual(r.prep.manifest.migrations.destructive_in_chain, ["20270201000000"]);
+    assert.equal(r.result.ok, true, JSON.stringify(r.result.failures));
+    assert.deepEqual(steps(r), [
+        "candidate.identify:pass", "staging.verify:pass", "production.preflight:pass", "owner.approval:pass", "production.snapshot:pass",
+        "schema.expand:ledger_ready", ...FP_ALL.map(() => "schema.expand:applied"), "schema.expand:pass", "schema.expand:census_pass",
+        "code.deploy:pass", "production.verify:pass", "schema.contract:skip", "release.record:pass",
+    ]);
+    assert.deepEqual(auditOf(r).filter((e) => e.status === "applied").map((e) => e.detail.version), FP_ALL, "applied in version order");
+    assert.deepEqual(r.after.ledger, FP_ALL);
+    assert.deepEqual(r.after.fingerprint, r.prep.manifest.expected_fingerprint, "the new project's schema equals staging's");
+    assert.deepEqual(r.after.orgs, [{ id: "99999999-0000-4000-8000-000000000017", status: "retired", name: "_w17_selftest_0bbaad43" }]);
+    assert.equal(r.after.buildInfo.gitSha, r.fixture.stagingSha);
+    assert.equal(r.after.buildInfo.supabaseProjectRef, "rehearsalnewprojectr");
+    assert.equal(verifyAuditChain(readFileSync(r.auditPath, "utf8")).ok, true);
+    const statements = pg.psql(r.dbs.productionDb, "select count(*) from supabase_migrations.schema_migrations where statements is not null;");
+    assert.equal(statements, String(FP_ALL.length), "each ledger row carries the statements it ran");
+});
+
+test("first promotion: refused when the target's ledger is not empty; nothing is applied", async () => {
+    const r = await runFirst("fp_ledger_not_empty", {
+        beforePrepare: ({ pg: p, dbs }) => {
+            p.psql(dbs.productionDb, "create schema supabase_migrations; create table supabase_migrations.schema_migrations (version text primary key, name text, statements text[]);");
+            p.applyMigration(dbs.productionDb, { version: "20270101000000", name: "orgs", sql: "select 1;" });
+        },
+    });
+    assert.equal(r.prep.ok, false);
+    assert.equal(r.prep.step, "production.preflight");
+    assert.match(r.prep.failures.join(" "), /first_promotion_ledger_not_empty: the target records 1 version/);
+    assert.equal(r.result, null);
+    assert.deepEqual(r.after.ledger, ["20270101000000"]);
+    untouched(r);
+});
+
+test("first promotion: the same evidence without the flag is a routine release and blocks as before", async () => {
+    const r = await run("fp_without_flag", { release: FP_RELEASE });
+    assert.equal(r.prep.step, "production.preflight");
+    assert.match(r.prep.failures.join(" "), /contract_not_last/);
+    assert.equal(r.prep.manifest, undefined);
+});
+
+test("first promotion: a write to the target after the approval is refused before the chain", async () => {
+    const r = await runFirst("fp_drift", {
+        beforeExecute: ({ pg: p, dbs }) => {
+            p.psql(dbs.productionDb, "create schema supabase_migrations; create table supabase_migrations.schema_migrations (version text primary key, name text, statements text[]);");
+            p.applyMigration(dbs.productionDb, { version: "20270115000000", name: "someone_else", sql: "select 1;" });
+        },
+    });
+    assert.equal(r.result.step, "schema.expand");
+    assert.match(r.result.failures.join(" "), /no longer empty/);
+    assert.deepEqual(r.after.ledger, ["20270115000000"]);
+    untouched(r);
+});
+
+test("first promotion: a failing file mid-chain stops; it left nothing; the old build serves on the old project", async () => {
+    const r = await runFirst("fp_migration_failure", { faults: { failMigration: "20270201000100" } });
+    assert.equal(r.result.step, "schema.expand");
+    assert.deepEqual(r.result.applied, FP_ALL.slice(0, 4));
+    assert.deepEqual(r.after.ledger, FP_ALL.slice(0, 4));
+    assert.equal(pg.psql(r.dbs.productionDb, "select count(*) from information_schema.columns where table_name = 'people' and column_name = 'email';"), "0", "the failing file's DDL rolled back with it");
+    untouched(r);
+});
+
+test("first promotion: the census fails (an extension missing) → hold before any code points at the new project", async () => {
+    const r = await runFirst("fp_census_fail", { faults: { censusMissingExtension: true } });
+    assert.equal(r.result.step, "schema.expand");
+    assert.match(r.result.failures.join(" "), /census: extension pg_cron is missing/);
+    assert.match(r.result.recovery, /previous build on the previous project/);
+    assert.deepEqual(r.after.ledger, FP_ALL);
+    untouched(r);
+});
+
+test("first promotion: an approval without schema_contract cannot start a chain that holds destructive files", async () => {
+    const r = await runFirst("fp_no_contract_scope", { approve: (_m, mk) => mk({ scope: [...RELEASE_SCOPES] }) });
+    assert.equal(r.result.step, "schema.expand");
+    assert.match(r.result.failures.join(" "), /does not grant schema_contract/);
+    assert.deepEqual(r.after.ledger, [], "nothing applied");
+    untouched(r);
+});
+
+test("first promotion: verification fails after the deploy → code rollback to the previous build, on the previous project", async () => {
+    const r = await runFirst("fp_verify_fail_rollback", { faults: { deployServesStale: true } });
+    assert.equal(r.result.ok, false);
+    assert.equal(r.result.rolledBack, true);
+    assert.deepEqual(steps(r).slice(-2), ["production.verify:fail", "code.rollback:pass"]);
+    assert.equal(r.after.buildInfo.gitSha, r.fixture.mainSha);
+    assert.equal(r.after.buildInfo.supabaseProjectRef, "rehearsalproductionrf");
+});
+
+test("first promotion: a config copy that names another new project is refused at the approval", async () => {
+    const r = await runFirst("fp_config_mismatch", {
+        beforeExecute: ({ config }) => {
+            config.environments.production.supabase_project_ref = "rehearsalotherprojec";
+        },
+    });
+    assert.equal(r.result.step, "owner.approval");
+    assert.match(r.result.failures.join(" "), /the manifest's new project is rehearsalnewprojectr/);
+    assert.deepEqual(r.after.ledger, []);
 });
 
 test("the rehearsal database is a labelled, network-less throwaway", () => {

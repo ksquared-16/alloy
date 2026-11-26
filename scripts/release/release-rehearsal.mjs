@@ -15,7 +15,7 @@ import { createServer } from "node:http";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { FINGERPRINT_SQL, LEDGER_SQL, ORGS_SQL, parseKeyValue, parseLedger, parseOrgs, rehearsalConfigRefusal, wrapMigrationForApply } from "./release-lib.mjs";
+import { FINGERPRINT_SQL, FIRST_PROMOTION_CENSUS_SQL, LEDGER_IF_PRESENT_PSQL, LEDGER_SQL, ORGS_SQL, parseKeyValue, parseLedger, parseOrgs, rehearsalConfigRefusal, wrapMigrationForApply } from "./release-lib.mjs";
 
 export const REHEARSAL_LABEL = "alloy.purpose=p6-release-rehearsal";
 export const REHEARSAL_IMAGE = "postgres:17-alpine";
@@ -58,18 +58,21 @@ export class ThrowawayPostgres {
         if (singleTransaction) args.push("--single-transaction");
         return sh("docker", [...args, "-f", "-"], { input: sql }).trim();
     }
-    createDb(db) {
+    /** `ledger: false` is a new project: no ledger table at all (briefing §4 item 3). */
+    createDb(db, { ledger = true } = {}) {
         this.psql("postgres", `create database ${db};`);
-        this.psql(db, "create schema supabase_migrations; create table supabase_migrations.schema_migrations (version text primary key, name text, statements text[]);");
+        if (ledger) this.psql(db, "create schema supabase_migrations; create table supabase_migrations.schema_migrations (version text primary key, name text, statements text[]);");
     }
     /** As `supabase db push` does per file: the file and its ledger row in one transaction. */
     applyMigration(db, migration) {
         this.psql(db, wrapMigrationForApply(migration), { singleTransaction: true });
     }
-    observe(db) {
+    /** `tolerant`: a new project may have no ledger table and no orgs table yet; both read as empty. */
+    observe(db, { tolerant = false } = {}) {
+        const hasOrgs = () => this.psql(db, "select to_regclass('public.orgs') is not null;") === "t";
         return {
-            ledger: parseLedger(this.psql(db, LEDGER_SQL)),
-            orgs: parseOrgs(this.psql(db, ORGS_SQL)),
+            ledger: parseLedger(this.psql(db, tolerant ? LEDGER_IF_PRESENT_PSQL : LEDGER_SQL)),
+            orgs: !tolerant || hasOrgs() ? parseOrgs(this.psql(db, ORGS_SQL)) : [],
             fingerprint: parseKeyValue(this.psql(db, FINGERPRINT_SQL)),
         };
     }
@@ -95,7 +98,10 @@ export async function startBuildInfoServer({ originGitDir, refs }) {
         if (env === "staging") body = { gitSha: head("staging"), gitBranch: "staging", vercelEnv: "preview", supabaseProjectRef: refs.staging };
         else if (env === "production") {
             const sha = state.pin ?? (state.staleProduction ? state.previousProduction : head("main"));
-            body = { gitSha: sha, gitBranch: "main", vercelEnv: "production", supabaseProjectRef: refs.production };
+            // First promotion: the previous build stays wired to the previous project (a Vercel
+            // deployment keeps the environment it was built with); the new build names the new one.
+            const ref = refs.productionPrevious && sha === state.previousProduction ? refs.productionPrevious : refs.production;
+            body = { gitSha: sha, gitBranch: "main", vercelEnv: "production", supabaseProjectRef: ref };
         } else {
             res.writeHead(404).end();
             return;
@@ -118,13 +124,18 @@ export async function fetchBuildInfo(url) {
  * The rehearsal's release config: the real policy (owners replaced, tenancy and required checks
  * unchanged) with every environment identity replaced by a loopback stand-in.
  */
-export function rehearsalConfig(base, buildInfo) {
+export const REHEARSAL_REFS = Object.freeze({ staging: "rehearsalstagingref0", production: "rehearsalproductionrf", newProject: "rehearsalnewprojectr" });
+
+export function rehearsalConfig(base, buildInfo, { firstPromotion = false } = {}) {
+    const production = firstPromotion
+        ? { supabase_project_ref: REHEARSAL_REFS.newProject, previous_supabase_project_ref: REHEARSAL_REFS.production }
+        : { supabase_project_ref: REHEARSAL_REFS.production };
     const config = {
         ...base,
         owners: ["Rehearsal Owner"],
         environments: {
-            staging: { ...base.environments.staging, supabase_project_ref: "rehearsalstagingref0", build_info_url: buildInfo.url("staging") },
-            production: { ...base.environments.production, supabase_project_ref: "rehearsalproductionrf", build_info_url: buildInfo.url("production") },
+            staging: { ...base.environments.staging, supabase_project_ref: REHEARSAL_REFS.staging, build_info_url: buildInfo.url("staging") },
+            production: { ...base.environments.production, ...production, build_info_url: buildInfo.url("production") },
         },
     };
     const refusal = rehearsalConfigRefusal(config);
@@ -133,14 +144,24 @@ export function rehearsalConfig(base, buildInfo) {
 }
 
 /** Adapters over the stand-ins, in the shape release-runner.mjs expects. */
-export function rehearsalAdapters({ pg, stagingDb, productionDb, originGitDir, buildInfo, config, checkRuns, faults = {} }) {
+export function rehearsalAdapters({ pg, stagingDb, productionDb, originGitDir, buildInfo, config, checkRuns, faults = {}, firstPromotion = false }) {
     return {
         staging: {
             observe: async () => ({ buildInfo: await fetchBuildInfo(config.environments.staging.build_info_url), checkRuns, ...pg.observe(stagingDb) }),
         },
         production: {
-            observe: async () => ({ buildInfo: await fetchBuildInfo(config.environments.production.build_info_url), ...pg.observe(productionDb) }),
-            snapshot: async () => ({ ...pg.dump(productionDb), fingerprint: pg.observe(productionDb).fingerprint }),
+            observe: async () => ({ buildInfo: await fetchBuildInfo(config.environments.production.build_info_url), ...pg.observe(productionDb, { tolerant: firstPromotion }) }),
+            ensureLedger: async (sql) => {
+                pg.psql(productionDb, sql);
+            },
+            // The census query runs for real. postgres:17-alpine has no pg_cron, pg_net, supabase_vault or
+            // storage schema, so those four entries are stand-ins here; the full-chain rehearsal on the
+            // Supabase image observes them (environments-b2-first-promotion-evidence-2026-11-25/).
+            census: async () => ({
+                ...parseKeyValue(pg.psql(productionDb, FIRST_PROMOTION_CENSUS_SQL)),
+                ...(faults.censusMissingExtension ? {} : { "extension:pg_cron": "present", "extension:pg_net": "present", "extension:supabase_vault": "present", "bucket:org_documents": "present" }),
+            }),
+            snapshot: async () => ({ ...pg.dump(productionDb), fingerprint: pg.observe(productionDb, { tolerant: firstPromotion }).fingerprint }),
             applyMigration: async (m) => {
                 // A real failure inside the database, after the file's own statements ran: the single
                 // transaction must take the file's DDL and its ledger row back with it.
@@ -227,11 +248,21 @@ export const ORG_ROWS = {
 };
 
 /** Staging stand-in: the candidate's whole chain + ALY-14 tenancy. Production stand-in: main's chain + its own school. */
-export function provisionStandIns(pg, fixture, { suffix, stagingOrgs = [ORG_ROWS.firefly, ORG_ROWS.zzQa, ORG_ROWS.zzCross], productionOrgs = [ORG_ROWS.productionSchool] }) {
+export function provisionStandIns(pg, fixture, { suffix, stagingOrgs = [ORG_ROWS.firefly, ORG_ROWS.zzQa, ORG_ROWS.zzCross], productionOrgs = [ORG_ROWS.productionSchool], firstPromotion = false }) {
     const stagingDb = `p6_staging_${suffix}`;
     const productionDb = `p6_production_${suffix}`;
     pg.createDb(stagingDb);
-    pg.createDb(productionDb);
+    pg.createDb(productionDb, { ledger: !firstPromotion });
+    if (firstPromotion) {
+        // A new project: nothing at all, not even the ledger table. Staging still runs the whole chain.
+        for (const [file, sql] of Object.entries({ ...fixture.base, ...fixture.release }).sort()) {
+            const [, version, name] = /^(\d{14})_(.+)\.sql$/.exec(file);
+            pg.applyMigration(stagingDb, { version, name, sql });
+        }
+        if (stagingOrgs.length) pg.psql(stagingDb, `insert into public.orgs (id, name, status) values ${stagingOrgs.join(", ")} on conflict (id) do nothing;`);
+        if (productionOrgs.length) throw new Error("a first-promotion target starts empty");
+        return { stagingDb, productionDb };
+    }
     const apply = (db, files) => {
         for (const [file, sql] of Object.entries(files).sort()) {
             const [, version, name] = /^(\d{14})_(.+)\.sql$/.exec(file);
@@ -255,23 +286,27 @@ export const greenCheckRuns = (config, sha) => ({ check_runs: config.required_ch
  * `approve(manifest, makeApprovalFor)` returns the approval to execute with (or null for none);
  * `beforeExecute(ctx)` may change the world between approval and execution (drift, a moved main).
  */
-export async function runRehearsalScenario({ pg, baseConfig, outDir, name, release, stagingOrgs, productionOrgs, checkRuns, faults = {}, approve, beforePrepare, beforeExecute, now }) {
+export async function runRehearsalScenario({ pg, baseConfig, outDir, name, release, base, stagingOrgs, productionOrgs, checkRuns, faults = {}, approve, beforePrepare, beforeExecute, now, firstPromotion = false, config: configOverride }) {
     const { AuditLog, gitRunner, makeApproval, readBlob, scopesFor } = await import("./release-lib.mjs");
     const { prepare, execute } = await import("./release-runner.mjs");
-    const fixture = buildFixtureRepo(release ? { release } : {});
-    const buildInfo = await startBuildInfoServer({ originGitDir: fixture.originGitDir, refs: { staging: "rehearsalstagingref0", production: "rehearsalproductionrf" } });
+    const fixture = buildFixtureRepo({ ...(release ? { release } : {}), ...(base ? { base } : {}) });
+    const refs = firstPromotion
+        ? { staging: REHEARSAL_REFS.staging, production: REHEARSAL_REFS.newProject, productionPrevious: REHEARSAL_REFS.production }
+        : { staging: REHEARSAL_REFS.staging, production: REHEARSAL_REFS.production };
+    const buildInfo = await startBuildInfoServer({ originGitDir: fixture.originGitDir, refs });
     try {
-        const config = rehearsalConfig(baseConfig, buildInfo);
+        const config = configOverride ? configOverride(rehearsalConfig(baseConfig, buildInfo, { firstPromotion })) : rehearsalConfig(baseConfig, buildInfo, { firstPromotion });
         const suffix = name.replace(/[^a-z0-9]/g, "_");
-        const dbs = provisionStandIns(pg, fixture, { suffix, stagingOrgs, productionOrgs });
+        const dbs = provisionStandIns(pg, fixture, { suffix, stagingOrgs, productionOrgs: firstPromotion ? productionOrgs ?? [] : productionOrgs, firstPromotion });
         const audit = new AuditLog(join(outDir, `${name}.audit.jsonl`));
         const git = gitRunner(fixture.dir);
         if (faults.moveMainBeforeDeploy === true) faults = { ...faults, moveMainBeforeDeploy: fixture.hotfixSha };
-        const adapters = rehearsalAdapters({ pg, ...dbs, originGitDir: fixture.originGitDir, buildInfo, config, checkRuns: checkRuns ? checkRuns(config, fixture.stagingSha) : greenCheckRuns(config, fixture.stagingSha), faults });
+        const adapters = rehearsalAdapters({ pg, ...dbs, originGitDir: fixture.originGitDir, buildInfo, config, checkRuns: checkRuns ? checkRuns(config, fixture.stagingSha) : greenCheckRuns(config, fixture.stagingSha), faults, firstPromotion });
         if (beforePrepare) await beforePrepare({ pg, dbs, fixture, config });
-        const before = { ...pg.observe(dbs.productionDb), buildInfo: await fetchBuildInfo(config.environments.production.build_info_url) };
+        const observeProduction = () => pg.observe(dbs.productionDb, { tolerant: firstPromotion });
+        const before = { ...observeProduction(), buildInfo: await fetchBuildInfo(config.environments.production.build_info_url) };
 
-        const prep = await prepare({ git, refs: { stagingRef: "staging", mainRef: "main" }, config, environment: "rehearsal", adapters, audit, now });
+        const prep = await prepare({ git, refs: { stagingRef: "staging", mainRef: "main" }, config, environment: "rehearsal", adapters, audit, now, firstPromotion });
         let approval = null;
         let result = null;
         if (prep.ok) {
@@ -284,7 +319,7 @@ export async function runRehearsalScenario({ pg, baseConfig, outDir, name, relea
             const sqlOf = (m) => readBlob(git, m.blob);
             result = await execute({ manifest: prep.manifest, approval, config, environment: "rehearsal", adapters, audit, sqlOf, now });
         }
-        const after = { ...pg.observe(dbs.productionDb), buildInfo: await fetchBuildInfo(config.environments.production.build_info_url), main: sh("git", ["--git-dir", fixture.originGitDir, "rev-parse", "refs/heads/main"]).trim() };
+        const after = { ...observeProduction(), buildInfo: await fetchBuildInfo(config.environments.production.build_info_url), main: sh("git", ["--git-dir", fixture.originGitDir, "rev-parse", "refs/heads/main"]).trim() };
         return { fixture, config, dbs, prep, approval, result, before, after, auditPath: audit.path };
     } finally {
         await buildInfo.close();

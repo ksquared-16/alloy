@@ -82,11 +82,34 @@ that step's scope at that moment, so an approval that expires halfway through a 
 every observation file, the dump's sha256, and `audit.jsonl`. Each audit entry carries the hash of its body and of the
 previous entry, so an edit, a deletion or a reordering fails `verify-audit`.
 
+## First promotion (opt-in mode)
+
+The first promotion moves production to a **new, empty** Supabase project and builds it from the candidate's whole migration
+chain ([first-promotion briefing](../runtime/environments-p1s-first-promotion-briefing-2026-11-25.md) D2, D9, §4). It is the
+same ten steps, the same owner approval and the same audit chain, with these differences only. Each is switched on by
+`--first-promotion` on `plan`/`prepare` and then carried by the manifest (`"mode": "first_promotion"`). A manifest without
+`mode` is a routine release, and every command treats it exactly as before.
+
+| | Routine release | First promotion |
+|---|---|---|
+| Config | `scripts/release/release-config.json` | the release-directory copy `release first-promotion-config --new-ref <ref> --out <dir>/release-config.json`: production names the new ref and records the previous one as `previous_supabase_project_ref`; the policy (owners, checks, tenancy) is the committed file's, and `derived_from_sha256` names it. Every command for the manifest needs `--config <dir>/release-config.json`, and refuses a config naming other refs |
+| Production ledger | read with `LEDGER_SQL` | read with `release emit-sql ledger-if-present` (the table may not exist yet). It must be **empty**: any recorded version refuses the plan (`first_promotion_ledger_not_empty`), and `check-ledger` and `execute` refuse again if it is no longer empty |
+| `production.preflight` | production serves `main` on the configured project | production serves `main` on the **previous** project. The new project's public schema holds no table (`tables\|0`) |
+| Schema plan | pending versions; expand before the deploy, contract after; `contract_not_last` blocks | the whole chain, in version order, all at `schema.expand` before the deploy. `contract_not_last` is waived, and nothing else is. Each file keeps its class; `destructive_in_chain` lists the destructive ones, so the approval must grant `schema_contract` too |
+| `schema.expand` | `check-ledger`, then each expand file | `check-ledger`, the ledger table (`emit-sql ledger-table`, idempotent), each file in `apply-order`, then the census: `check-production --stage schema --census` (ledger, fingerprint equals staging's, RLS, no org but the retired self-test org, required extensions, bucket `org_documents`) before any code points at the project |
+| `production.verify` | as in step 8 | as in step 8 against the new ref, plus no tenant before tenant creation (D3) |
+| `schema.contract` | destructive files after the deploy | recorded as `skip`: they ran in the chain |
+| `code.rollback` | Instant Rollback to the previous deployment | the same. The previous deployment is still wired to the previous project, which nothing changed |
+
+Every write in the first-promotion runbook (`release runbook --manifest <dir>/manifest.json --config <dir>/release-config.json`)
+is preceded by a shell guard that refuses a URL on port 6543, a URL naming the previous project, and a URL not naming the new one.
+The full-chain rehearsal is in [`environments-b2-first-promotion-evidence-2026-11-25/`](../runtime/environments-b2-first-promotion-evidence-2026-11-25/).
+
 ## Rehearsal (non-live)
 
 ```bash
-npm run test:release-procedure      # offline: every control, 24 tests
-npm run test:release-rehearsal      # Docker, local only: 17 end-to-end scenarios
+npm run test:release-procedure      # offline: every control, 40 tests
+npm run test:release-rehearsal      # Docker, local only: 26 end-to-end scenarios (9 of them first promotion)
 npm run release -- rehearse --out-dir <dir>   # the same scenarios, keeping manifests, approvals and audit chains
 ```
 

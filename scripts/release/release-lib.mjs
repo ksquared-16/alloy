@@ -46,6 +46,12 @@ export const ROLLBACK_STEP = Object.freeze({ id: "code.rollback", production: tr
 export const RELEASE_SCOPES = Object.freeze(["snapshot", "schema_expand", "code_deploy", "code_rollback"]);
 export const CONTRACT_SCOPE = "schema_contract";
 
+// The first promotion (briefing D2, D9): production moves to a NEW, empty Supabase project, built by
+// applying the candidate's whole chain in version order. Opt-in only (`--first-promotion`); a
+// manifest without `mode` is a routine release and every function below treats it exactly as before.
+export const FIRST_PROMOTION = "first_promotion";
+export const isFirstPromotion = (manifest) => manifest?.mode === FIRST_PROMOTION;
+
 // ---------------------------------------------------------------------------------------------
 // Hashing and canonical form
 // ---------------------------------------------------------------------------------------------
@@ -278,11 +284,21 @@ export function classifyMigrationSql(sql) {
  * it — which blocks, because "what will run" is unknowable without it (P4: production's ledger was
  * never read). `baseline` is main's listing: what production's code was built from.
  */
-export function planSchema({ candidateMigrations, productionLedger, baseline = [], sqlOf }) {
+export function planSchema({ candidateMigrations, productionLedger, baseline = [], sqlOf, firstPromotion = false }) {
     const blockers = [];
     const warnings = [];
     if (!Array.isArray(productionLedger)) {
         return { status: "blocked", blockers: ["production_ledger_unknown: read production's supabase_migrations.schema_migrations first (read-only)"], warnings, pending: [], ledger_head: null };
+    }
+    if (firstPromotion) {
+        // The one waiver this mode makes (contract_not_last) is safe only because nothing reads the
+        // target yet. A target that records anything is not a new project: refuse outright.
+        if (productionLedger.length) {
+            const head = [...productionLedger].sort().at(-1);
+            return { status: "blocked", blockers: [`first_promotion_ledger_not_empty: the target records ${productionLedger.length} version(s) (head ${head}); first-promotion mode runs only against a new project with an empty ledger`], warnings, pending: [], ledger_head: head, mode: FIRST_PROMOTION };
+        }
+        const unversioned = candidateMigrations.filter((m) => !m.version).map((m) => m.file);
+        if (unversioned.length) blockers.push(`unversioned_file: ${unversioned.join(", ")} has no 14-digit version, so the chain cannot record it`);
     }
     const ledger = new Set(productionLedger);
     const ledgerHead = [...ledger].sort().at(-1) ?? null;
@@ -320,6 +336,24 @@ export function planSchema({ candidateMigrations, productionLedger, baseline = [
     }
     pending.sort((a, b) => a.version.localeCompare(b.version));
 
+    if (firstPromotion) {
+        // Briefing §4 item 5: the new project serves nothing until code.deploy, so the whole chain runs
+        // in version order before it, as P4 rehearsed. `expand` is "applied at schema.expand, before the
+        // deploy" (every file); `contract` is "after the deploy" (none). Each file keeps its class, and
+        // the destructive ones are listed so the approval must grant schema_contract for them.
+        return {
+            status: blockers.length ? "blocked" : pending.length ? "ready" : "noop",
+            blockers,
+            warnings,
+            ledger_head: null,
+            pending,
+            expand: pending.map((p) => p.version),
+            contract: [],
+            destructive_in_chain: pending.filter((p) => p.class === "contract").map((p) => p.version),
+            mode: FIRST_PROMOTION,
+        };
+    }
+
     // Destructive changes run after the new code is live. Versions are applied in order, so that is
     // only possible when every contract migration comes after every expand migration.
     const firstContract = pending.findIndex((p) => p.class === "contract");
@@ -343,6 +377,23 @@ export function planSchema({ candidateMigrations, productionLedger, baseline = [
 // ---------------------------------------------------------------------------------------------
 
 export const LEDGER_SQL = "select version from supabase_migrations.schema_migrations order by version;";
+
+// A new project may not have the ledger table yet (briefing §4 item 3). This psql script (stdin,
+// read-only) prints the ledger when the table exists and nothing when it does not: both mean "the
+// versions this project records", so the same parser and the same ledger hash apply.
+export const LEDGER_IF_PRESENT_PSQL = `select to_regclass('supabase_migrations.schema_migrations') is not null as alloy_has_ledger \\gset
+\\if :alloy_has_ledger
+${LEDGER_SQL}
+\\endif
+`;
+
+// The ledger table as P4 step 4 created it, for a project that has none. Idempotent; written only
+// inside schema.expand, after the approval.
+export const LEDGER_TABLE_SQL = `create schema if not exists supabase_migrations;
+create table if not exists supabase_migrations.schema_migrations (version text primary key);
+alter table supabase_migrations.schema_migrations add column if not exists statements text[];
+alter table supabase_migrations.schema_migrations add column if not exists name text;
+`;
 export const ORGS_SQL = "select o.id::text || '|' || coalesce(to_jsonb(o)->>'status','') || '|' || coalesce(to_jsonb(o)->>'name','') from public.orgs o order by o.id;";
 
 // The P2/P4 fingerprint (environments-p2-evidence-2026-11-25/schema-fingerprint.sql), so values
@@ -353,6 +404,23 @@ union all select 'functions_md5|' || md5(coalesce(string_agg(p.proname||'('||pg_
 union all select 'indexes_md5|' || md5(coalesce(string_agg(indexdef, ',' order by indexname),'')) from pg_indexes where schemaname='public'
 union all select 'tables|' || count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r'
 union all select 'rls_disabled|' || count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r' and not c.relrowsecurity;`;
+
+// Briefing §4 item 6, beyond the fingerprint: the required extensions (checklist C.1), the bucket,
+// the deliberate P4 F8 row, and every non-empty public table's row count (step 16's baseline).
+// Read-only; one `key|value` per line, like the fingerprint.
+export const FIRST_PROMOTION_REQUIRED_EXTENSIONS = Object.freeze(["btree_gist", "pg_cron", "pg_net", "pgcrypto", "supabase_vault", "uuid-ossp"]);
+export const FIRST_PROMOTION_CENSUS_SQL = `select 'extension:' || x.name || '|' || case when e.extname is null then 'missing' else 'present' end from unnest(array[${FIRST_PROMOTION_REQUIRED_EXTENSIONS.map((e) => `'${e}'`).join(",")}]) as x(name) left join pg_extension e on e.extname = x.name
+union all select 'bucket:org_documents|' || case when to_regclass('storage.buckets') is null then 'no storage schema' when (xpath('/row/c/text()', query_to_xml('select count(*) as c from storage.buckets where id = ''org_documents''', false, true, '')))[1]::text <> '0' then 'present' else 'missing' end
+union all select 'scheduled_work:clock_activation_certification|' || case when to_regclass('public.scheduled_work') is null then 'no table' else (xpath('/row/c/text()', query_to_xml('select count(*) as c from public.scheduled_work where label = ''clock_activation_certification''', false, true, '')))[1]::text end
+union all select 'rows:' || t || '|' || n from (select table_name::text as t, (xpath('/row/c/text()', query_to_xml(format('select count(*) as c from public.%I', table_name), false, true, '')))[1]::text as n from information_schema.tables where table_schema = 'public' and table_type = 'BASE TABLE') r where n <> '0';`;
+
+/** The census's pass/fail half: every required extension and the bucket present. Row counts are recorded, not judged. */
+export function checkFirstPromotionCensus(census) {
+    const f = [];
+    for (const e of FIRST_PROMOTION_REQUIRED_EXTENSIONS) if (census[`extension:${e}`] !== "present") f.push(`census: extension ${e} is ${census[`extension:${e}`] ?? "not observed"}`);
+    if (census["bucket:org_documents"] !== "present") f.push(`census: bucket org_documents is ${census["bucket:org_documents"] ?? "not observed"}`);
+    return f;
+}
 
 /**
  * One migration file plus its ledger row, for `psql -v ON_ERROR_STOP=1 --single-transaction -f -`:
@@ -447,16 +515,87 @@ export function checkStaging({ config, candidate, migrations, buildInfo, checkRu
     return { ok: failures.length === 0, failures, warnings: tenancy.warnings };
 }
 
-/** Step production.preflight: production still serves the build the manifest says it does. */
-export function checkProductionBefore({ config, candidate, buildInfo }) {
-    const failures = checkBuildInfo("production (before)", config.environments.production, buildInfo, candidate.production_before_sha);
+/**
+ * Step production.preflight: production still serves the build the manifest says it does. In a
+ * first promotion that build is still wired to the PREVIOUS project (the config copy names it), and
+ * the new project's public schema must be empty when a fingerprint was observed.
+ */
+export function checkProductionBefore({ config, candidate, buildInfo, firstPromotion = false, fingerprint }) {
+    const env = config.environments.production;
+    if (!firstPromotion) {
+        const failures = checkBuildInfo("production (before)", env, buildInfo, candidate.production_before_sha);
+        return { ok: failures.length === 0, failures };
+    }
+    const failures = firstPromotionConfigRefusal(config);
+    if (failures.length) return { ok: false, failures };
+    failures.push(...checkBuildInfo("production (before)", { ...env, supabase_project_ref: env.previous_supabase_project_ref }, buildInfo, candidate.production_before_sha));
+    if (fingerprint && fingerprint.tables !== "0") failures.push(`first promotion: the new project's public schema already holds ${fingerprint.tables ?? "unknown"} table(s); it must be empty`);
     return { ok: failures.length === 0, failures };
 }
 
+const SUPABASE_REF = /^[a-z]{20}$/;
+
+/**
+ * The config a first promotion runs with: a release-directory copy (alloy-release
+ * first-promotion-config) whose production names the NEW project and records the previous one.
+ * Returns failures (empty when usable).
+ */
+export function firstPromotionConfigRefusal(config) {
+    const p = config?.environments?.production ?? {};
+    const s = config?.environments?.staging ?? {};
+    const f = [];
+    if (!p.previous_supabase_project_ref) f.push("first promotion: the config names no production.previous_supabase_project_ref; use the release-directory copy (alloy-release first-promotion-config)");
+    if (!SUPABASE_REF.test(p.supabase_project_ref ?? "")) f.push(`first promotion: production.supabase_project_ref ${p.supabase_project_ref ?? "(none)"} is not a Supabase project ref`);
+    if (p.supabase_project_ref && p.supabase_project_ref === p.previous_supabase_project_ref) f.push("first promotion: the config's production project is the previous project, not a new one");
+    if (p.supabase_project_ref && p.supabase_project_ref === s.supabase_project_ref) f.push("first promotion: the config's production project is staging's project");
+    return f;
+}
+
+/** A first-promotion manifest binds its project refs; a config naming others cannot check or record it. */
+export function manifestConfigMismatch(manifest, config) {
+    if (!isFirstPromotion(manifest)) return [];
+    const p = config.environments.production;
+    const fp = manifest.first_promotion;
+    const f = [];
+    if (p.supabase_project_ref !== fp.new_supabase_project_ref) f.push(`config: production names ${p.supabase_project_ref}, the manifest's new project is ${fp.new_supabase_project_ref}`);
+    if (p.previous_supabase_project_ref !== fp.previous_supabase_project_ref) f.push(`config: previous project ${p.previous_supabase_project_ref ?? "(none)"}, the manifest's is ${fp.previous_supabase_project_ref}`);
+    return f;
+}
+
+/** The release-directory config copy for a first promotion: the committed policy, production on the new ref. */
+export function firstPromotionConfig(base, newRef) {
+    const prev = base.environments.production.supabase_project_ref;
+    const config = {
+        ...base,
+        environments: {
+            ...base.environments,
+            production: { ...base.environments.production, supabase_project_ref: newRef, previous_supabase_project_ref: prev },
+        },
+        derived_from_sha256: hashRecord(base),
+    };
+    const refusal = firstPromotionConfigRefusal(config);
+    if (refusal.length) throw new Error(refusal.join("; "));
+    return config;
+}
+
+/** D3: in a first promotion no tenant exists until step 16; the only org a migration creates is the retired self-test org. */
+export function checkNoTenantYet(tenancy, orgs) {
+    if (!Array.isArray(orgs)) return ["first promotion: org listing not observed"];
+    return orgs
+        .filter((o) => !(o.name.startsWith(tenancy.selftest_org_name_prefix) && o.status === "retired"))
+        .map((o) => `first promotion: org ${o.name} (${o.id}) exists before tenant creation; only the retired ${tenancy.selftest_org_name_prefix} org may`);
+}
+
 /** Step production.verify (and again after schema.contract). */
-export function checkProduction({ config, candidate, buildInfo, ledger, expectedVersions, fingerprint, expectedFingerprint, orgs }) {
+export function checkProduction({ config, candidate, buildInfo, ledger, expectedVersions, fingerprint, expectedFingerprint, orgs, firstPromotion = false }) {
+    const failures = checkBuildInfo("production", config.environments.production, buildInfo, candidate.sha);
+    failures.push(...checkTargetSchema({ config, ledger, expectedVersions, fingerprint, expectedFingerprint, orgs, firstPromotion }).failures);
+    return { ok: failures.length === 0, failures };
+}
+
+/** production.verify without the build identity: the schema census a first promotion runs before code.deploy (briefing §4 item 6). */
+export function checkTargetSchema({ config, ledger, expectedVersions, fingerprint, expectedFingerprint, orgs, firstPromotion = false }) {
     const failures = [];
-    failures.push(...checkBuildInfo("production", config.environments.production, buildInfo, candidate.sha));
     failures.push(...compareLedger("production", ledger, expectedVersions));
     if (!fingerprint) failures.push("production: schema fingerprint not observed");
     else {
@@ -468,6 +607,7 @@ export function checkProduction({ config, candidate, buildInfo, ledger, expected
         }
     }
     failures.push(...checkProductionTenantIsolation(config.tenancy, orgs));
+    if (firstPromotion) failures.push(...checkNoTenantYet(config.tenancy, orgs));
     return { ok: failures.length === 0, failures };
 }
 
@@ -475,8 +615,8 @@ export function checkProduction({ config, candidate, buildInfo, ledger, expected
 // Manifest and owner approval
 // ---------------------------------------------------------------------------------------------
 
-export function buildManifest({ environment, identified, plan, stagingVerification, createdAt }) {
-    return {
+export function buildManifest({ environment, identified, plan, stagingVerification, createdAt, config }) {
+    const manifest = {
         schema: "alloy.release-manifest/v1",
         environment,
         created_at: createdAt,
@@ -493,10 +633,17 @@ export function buildManifest({ environment, identified, plan, stagingVerificati
         staging_verification_sha256: hashRecord(stagingVerification),
         staging_verified_at: stagingVerification.verified_at,
     };
+    if (plan.mode !== FIRST_PROMOTION) return manifest;
+    const p = config.environments.production;
+    manifest.mode = FIRST_PROMOTION;
+    manifest.migrations.destructive_in_chain = plan.destructive_in_chain;
+    manifest.first_promotion = { new_supabase_project_ref: p.supabase_project_ref, previous_supabase_project_ref: p.previous_supabase_project_ref, config_sha256: hashRecord(config) };
+    return manifest;
 }
 
 export function scopesFor(manifest) {
-    return manifest.migrations.contract.length ? [...RELEASE_SCOPES, CONTRACT_SCOPE] : [...RELEASE_SCOPES];
+    const destructive = manifest.migrations.contract.length || manifest.migrations.destructive_in_chain?.length;
+    return destructive ? [...RELEASE_SCOPES, CONTRACT_SCOPE] : [...RELEASE_SCOPES];
 }
 
 export function makeApproval({ environment, approver, manifest, approvedAt, ttlHours, scope = scopesFor(manifest), statement }) {
@@ -513,7 +660,9 @@ export function makeApproval({ environment, approver, manifest, approvedAt, ttlH
         scope,
         approved_at: approved.toISOString(),
         expires_at: new Date(approved.getTime() + ttlHours * 3600_000).toISOString(),
-        statement: statement ?? `I approve releasing ${manifest.candidate.sha} to ${environment}, replacing ${manifest.candidate.production_before_sha}, with ${manifest.migrations.pending.length} migration(s).`,
+        statement: statement ?? (isFirstPromotion(manifest)
+            ? `I approve the first promotion of ${manifest.candidate.sha} to ${environment} on the new project ${manifest.first_promotion.new_supabase_project_ref}, replacing ${manifest.candidate.production_before_sha} on ${manifest.first_promotion.previous_supabase_project_ref} (left untouched), with the full chain of ${manifest.migrations.pending.length} migration(s) applied in version order.`
+            : `I approve releasing ${manifest.candidate.sha} to ${environment}, replacing ${manifest.candidate.production_before_sha}, with ${manifest.migrations.pending.length} migration(s).`),
     };
 }
 

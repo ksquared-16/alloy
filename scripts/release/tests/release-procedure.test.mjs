@@ -6,17 +6,28 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import {
     AuditLog,
+    CONTRACT_SCOPE,
+    FIRST_PROMOTION,
+    LEDGER_IF_PRESENT_PSQL,
     RELEASE_SCOPES,
     STEPS,
+    buildManifest,
     canonicalJson,
+    checkFirstPromotionCensus,
+    checkNoTenantYet,
     checkProduction,
+    checkProductionBefore,
+    firstPromotionConfig,
+    firstPromotionConfigRefusal,
+    manifestConfigMismatch,
+    scopesFor,
     checkProductionTenantIsolation,
     checkStaging,
     checkStagingTenancy,
@@ -31,7 +42,7 @@ import {
     verifyAuditChain,
     wrapMigrationForApply,
 } from "../release-lib.mjs";
-import { approvalRefusal, renderRunbook } from "../alloy-release.mjs";
+import { approvalRefusal, renderFirstPromotionRunbook, renderRunbook } from "../alloy-release.mjs";
 import { buildFixtureRepo, greenCheckRuns } from "../release-rehearsal.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -398,6 +409,236 @@ test("live evidence path through the CLI: prepare → runbook → record (gated)
     const bad = after(fx.mainSha, all.slice(0, 3));
     assert.equal(bad.status, 1);
     assert.match(bad.out, /serves .*expected/);
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(fx.root, { recursive: true, force: true });
+});
+
+// --- first-promotion mode (briefing D9, M3/M4) ------------------------------------------------
+
+const NEW_REF = "abcdefghijklmnopqrst";
+const fpConfig = firstPromotionConfig(config, NEW_REF);
+const chain = [mig("20270101000000", "orgs"), mig("20270102000000", "drop_legacy"), mig("20270103000000", "add_col"), mig("20270104000000", "w17_retire")];
+const chainSql = sqlOf({ "20270102000000": "drop table if exists public.legacy;" });
+
+test("first promotion: an empty ledger plans the whole chain in version order; the contract_not_last waiver is the only one", () => {
+    const shuffled = [chain[2], chain[0], chain[3], chain[1]];
+    const p = planSchema({ candidateMigrations: shuffled, productionLedger: [], baseline: [chain[0]], sqlOf: chainSql, firstPromotion: true });
+    assert.equal(p.status, "ready", p.blockers.join("; "));
+    assert.equal(p.mode, FIRST_PROMOTION);
+    assert.deepEqual(p.expand, chain.map((m) => m.version), "every file, ascending, before the deploy");
+    assert.deepEqual(p.contract, []);
+    assert.deepEqual(p.destructive_in_chain, ["20270102000000"]);
+    assert.equal(p.pending.find((x) => x.version === "20270102000000").class, "contract", "each file keeps its class");
+    // The same chain in a routine release is still blocked: the waiver needs the mode.
+    const routine = planSchema({ candidateMigrations: shuffled, productionLedger: [], baseline: [chain[0]], sqlOf: chainSql });
+    assert.match(routine.blockers.join(" "), /contract_not_last/);
+    assert.equal(routine.mode, undefined);
+});
+
+test("first promotion: a target that records any version is refused outright", () => {
+    const p = planSchema({ candidateMigrations: chain, productionLedger: ["20270101000000"], baseline: [], sqlOf: chainSql, firstPromotion: true });
+    assert.equal(p.status, "blocked");
+    assert.deepEqual(p.pending, []);
+    assert.match(p.blockers[0], /first_promotion_ledger_not_empty: the target records 1 version/);
+    const unknown = planSchema({ candidateMigrations: chain, productionLedger: null, sqlOf: chainSql, firstPromotion: true });
+    assert.match(unknown.blockers[0], /production_ledger_unknown/);
+    const unversioned = planSchema({ candidateMigrations: [...chain, { version: null, name: "x", file: "x.sql", blob: "b" }], productionLedger: [], sqlOf: chainSql, firstPromotion: true });
+    assert.match(unversioned.blockers.join(" "), /unversioned_file: x\.sql/);
+});
+
+test("first promotion: the other planner blockers still apply (renumbered duplicate needs a ledger, so: none can fire on empty), routine plans are byte-identical without the flag", () => {
+    const cand = [mig("20270101000000", "a"), mig("20270301000000", "c"), mig("20270201000000", "b")];
+    const args = { candidateMigrations: cand, productionLedger: ["20270101000000"], baseline: [cand[0]], sqlOf: sqlOf({ "20270301000000": "drop table public.old;" }) };
+    assert.deepEqual(planSchema(args), planSchema({ ...args, firstPromotion: false }));
+    assert.deepEqual(Object.keys(planSchema(args)).sort(), ["blockers", "contract", "expand", "ledger_head", "pending", "status", "warnings"]);
+});
+
+test("first-promotion config copy: names the new ref, records the previous one, leaves the policy alone", () => {
+    assert.equal(fpConfig.environments.production.supabase_project_ref, NEW_REF);
+    assert.equal(fpConfig.environments.production.previous_supabase_project_ref, "vslwnntzzgpnmrpjipat");
+    assert.equal(fpConfig.derived_from_sha256, hashRecord(config));
+    assert.deepEqual({ ...fpConfig, environments: undefined, derived_from_sha256: undefined }, { ...config, environments: undefined, derived_from_sha256: undefined });
+    assert.deepEqual(fpConfig.environments.staging, config.environments.staging);
+    assert.equal(config.environments.production.supabase_project_ref, "vslwnntzzgpnmrpjipat", "the committed config is unchanged");
+    assert.throws(() => firstPromotionConfig(config, "vslwnntzzgpnmrpjipat"), /previous project/);
+    assert.throws(() => firstPromotionConfig(config, "ikaxilmwmrmbagoidedu"), /staging's project/);
+    assert.throws(() => firstPromotionConfig(config, "Not-A-Ref"), /not a Supabase project ref/);
+    assert.match(firstPromotionConfigRefusal(config).join(" "), /no production\.previous_supabase_project_ref/, "the committed config cannot run a first promotion");
+});
+
+test("first promotion preflight: production still serves old main on the PREVIOUS project; the new project is empty", () => {
+    const before = { gitSha: candidate.production_before_sha, gitBranch: "main", vercelEnv: "production", supabaseProjectRef: "vslwnntzzgpnmrpjipat" };
+    assert.deepEqual(checkProductionBefore({ config: fpConfig, candidate, buildInfo: before, firstPromotion: true }).failures, []);
+    assert.deepEqual(checkProductionBefore({ config: fpConfig, candidate, buildInfo: before, firstPromotion: true, fingerprint: { tables: "0" } }).failures, []);
+    assert.match(checkProductionBefore({ config: fpConfig, candidate, buildInfo: before, firstPromotion: true, fingerprint: { tables: "3" } }).failures.join(" "), /already holds 3 table/);
+    assert.match(checkProductionBefore({ config: fpConfig, candidate, buildInfo: { ...before, supabaseProjectRef: NEW_REF }, firstPromotion: true }).failures.join(" "), /expected vslwnntzzgpnmrpjipat/);
+    assert.match(checkProductionBefore({ config, candidate, buildInfo: before, firstPromotion: true }).failures.join(" "), /previous_supabase_project_ref/);
+    // Routine preflight is unchanged: the committed config, the committed ref.
+    assert.deepEqual(checkProductionBefore({ config, candidate, buildInfo: before }).failures, []);
+    assert.match(checkProductionBefore({ config: fpConfig, candidate, buildInfo: before }).failures.join(" "), new RegExp(`expected ${NEW_REF}`));
+});
+
+const fpIdentified = { candidate: { ...candidate, commits_ahead_of_main: 3 }, migrations: chain, baseline_migrations: [] };
+const fpPlan = planSchema({ candidateMigrations: chain, productionLedger: [], sqlOf: chainSql, firstPromotion: true });
+const fpManifest = {
+    ...buildManifest({ environment: "production", identified: fpIdentified, plan: fpPlan, stagingVerification: { verified_at: "2027-01-01T10:00:00.000Z" }, createdAt: "2027-01-01T10:05:00.000Z", config: fpConfig }),
+    production_ledger_sha256: hashRecord([]),
+    expected_fingerprint: null,
+    candidate_versions: chain.map((m) => m.version),
+};
+
+test("first-promotion manifest: carries the mode and both refs; the approval must grant schema_contract for the chain's destructive files", () => {
+    assert.equal(fpManifest.mode, FIRST_PROMOTION);
+    assert.deepEqual(fpManifest.first_promotion, { new_supabase_project_ref: NEW_REF, previous_supabase_project_ref: "vslwnntzzgpnmrpjipat", config_sha256: hashRecord(fpConfig) });
+    assert.deepEqual(scopesFor(fpManifest), [...RELEASE_SCOPES, CONTRACT_SCOPE]);
+    const a = makeApproval({ environment: "production", approver: "Kelly", manifest: fpManifest, approvedAt: "2027-01-01T11:00:00.000Z", ttlHours: 4 });
+    assert.match(a.statement, new RegExp(`first promotion .* new project ${NEW_REF}, .* on vslwnntzzgpnmrpjipat \\(left untouched\\)`));
+    assert.equal(verifyApproval({ approval: a, manifest: fpManifest, config: fpConfig, environment: "production", now: "2027-01-01T12:00:00.000Z", scopeNeeded: "schema_expand" }).ok, true);
+    // Routine manifests gain no keys.
+    const routine = buildManifest({ environment: "production", identified: fpIdentified, plan: planSchema({ candidateMigrations: chain.slice(0, 1), productionLedger: [], sqlOf: chainSql }), stagingVerification: { verified_at: "x" }, createdAt: "y", config });
+    assert.deepEqual(Object.keys(routine).sort(), ["candidate", "created_at", "environment", "migrations", "schema", "staging_verification_sha256", "staging_verified_at"]);
+    assert.equal(routine.migrations.destructive_in_chain, undefined);
+});
+
+test("first-promotion manifest: a config naming any other project cannot check or record it", () => {
+    assert.deepEqual(manifestConfigMismatch(fpManifest, fpConfig), []);
+    assert.match(manifestConfigMismatch(fpManifest, config).join(" "), /production names vslwnntzzgpnmrpjipat, the manifest's new project is abcdefghijklmnopqrst/);
+    assert.match(manifestConfigMismatch(fpManifest, firstPromotionConfig(config, "zyxwvutsrqponmlkjihg")).join(" "), /new project is abcdefghijklmnopqrst/);
+    assert.deepEqual(manifestConfigMismatch(manifest, config), [], "routine manifests are not affected");
+});
+
+test("first promotion verification: no tenant before step 16, only the retired self-test org; census needs the extensions and the bucket", () => {
+    const w17 = { id: "w", status: "retired", name: "_w17_selftest_0bbaad43" };
+    assert.deepEqual(checkNoTenantYet(T, [w17]), []);
+    assert.deepEqual(checkNoTenantYet(T, []), []);
+    assert.match(checkNoTenantYet(T, [w17, FIREFLY]).join(" "), /org Firefly .* exists before tenant creation/);
+    assert.equal(checkNoTenantYet(T, [{ ...w17, status: "active" }]).length, 1);
+    const fp = { columns_md5: "a", policies_md5: "b", functions_md5: "c", indexes_md5: "d", tables: "2", rls_disabled: "0" };
+    const newBuild = { gitSha: candidate.sha, gitBranch: "main", vercelEnv: "production", supabaseProjectRef: NEW_REF };
+    const base = { config: fpConfig, candidate, buildInfo: newBuild, ledger: ["1"], expectedVersions: ["1"], fingerprint: fp, expectedFingerprint: fp };
+    assert.equal(checkProduction({ ...base, orgs: [w17], firstPromotion: true }).ok, true);
+    assert.equal(checkProduction({ ...base, orgs: [FIREFLY], firstPromotion: true }).ok, false);
+    assert.equal(checkProduction({ ...base, orgs: [FIREFLY] }).ok, true, "routine verification does not apply the no-tenant rule");
+    assert.match(checkProduction({ ...base, buildInfo: { ...newBuild, supabaseProjectRef: "vslwnntzzgpnmrpjipat" }, orgs: [w17], firstPromotion: true }).failures.join(" "), new RegExp(`expected ${NEW_REF}`), "check-production expects the new ref");
+    const census = { "extension:btree_gist": "present", "extension:pg_cron": "present", "extension:pg_net": "present", "extension:pgcrypto": "present", "extension:supabase_vault": "present", "extension:uuid-ossp": "present", "bucket:org_documents": "present" };
+    assert.deepEqual(checkFirstPromotionCensus(census), []);
+    assert.match(checkFirstPromotionCensus({ ...census, "extension:pg_net": "missing", "bucket:org_documents": undefined }).join(" "), /pg_net is missing.*org_documents is not observed/);
+});
+
+test("first-promotion runbook: config copy on every command, a target guard on every write, the whole chain, census before deploy", () => {
+    const text = renderFirstPromotionRunbook(fpManifest, fpConfig);
+    const order = ["## 4. owner.approval", "## 5. production.snapshot", "## 6. schema.expand", "--stage schema", "## 7. code.deploy", "## 8. production.verify", "## 9. schema.contract", "## 10. release.record"].map((h) => text.indexOf(h));
+    assert.ok(order.every((v, i) => v >= 0 && (i === 0 || v > order[i - 1])), String(order));
+    for (const line of text.split("\n").filter((l) => /alloy-release\.mjs (approve|record|check-production|check-ledger)/.test(l))) assert.match(line, /--config <release-dir>\/release-config\.json/, line);
+    for (const line of text.split("\n").filter((l) => /psql "\$PRODUCTION_DB_URL" /.test(l) || /pg_dump/.test(l))) assert.match(line, /fp_target "\$PRODUCTION_DB_URL" &&/, line);
+    assert.match(text, /\*:6543\*\) echo "refused: transaction pooler/);
+    assert.match(text, /\*vslwnntzzgpnmrpjipat\*\) echo "refused: names the previous project"/);
+    assert.match(text, /--single-transaction/);
+    assert.match(text, /ON_ERROR_STOP=1/);
+    assert.match(text, /set -o pipefail/);
+    assert.match(text, /apply-order --manifest/);
+    assert.match(text, new RegExp(`"supabaseProjectRef":"${NEW_REF}"`));
+    assert.match(text, /never --force/);
+    assert.ok(!/supabase db push/.test(text));
+    assert.match(text, /4 migration\(s\), `20270101000000` … `20270104000000`/);
+    // The routine runbook does not change shape for routine manifests.
+    assert.ok(!renderRunbook({ ...manifest, candidate: { ...candidate, commits_ahead_of_main: 1 }, migrations: { ...manifest.migrations, production_ledger_head: "1" } }, config).includes("fp_target"));
+});
+
+test("ledger-if-present: psql meta-commands only; reads the ledger only when the table exists", () => {
+    assert.match(LEDGER_IF_PRESENT_PSQL, /^select to_regclass\('supabase_migrations\.schema_migrations'\) is not null as alloy_has_ledger \\gset\n\\if :alloy_has_ledger\nselect version from supabase_migrations\.schema_migrations order by version;\n\\endif\n$/);
+});
+
+test("first promotion through the CLI: config copy → prepare --first-promotion → runbook → check-ledger → record → check-production; refusals", () => {
+    const fx = buildFixtureRepo({ release: { "20270201000000_drop_full_name.sql": "alter table public.people drop column if exists full_name;\n", "20270201000100_people_email.sql": "alter table public.people add column if not exists email text;\n" } });
+    const dir = mkdtempSync(join(tmpdir(), "alloy-release-fp-cli-"));
+    const cli = (...args) => {
+        try {
+            return { status: 0, out: execFileSync("node", [join(HERE, "..", "alloy-release.mjs"), ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }) };
+        } catch (e) {
+            return { status: e.status, out: String(e.stdout), err: String(e.stderr) };
+        }
+    };
+    const w = (name, body) => (writeFileSync(join(dir, name), typeof body === "string" ? body : JSON.stringify(body)), join(dir, name));
+    const all = ["20270101000000", "20270101000100", "20270201000000", "20270201000100"];
+    const fp = "columns_md5|a\npolicies_md5|b\nfunctions_md5|c\nindexes_md5|d\ntables|2\nrls_disabled|0\n";
+    const out = join(dir, "release");
+    const cfgPath = join(out, "release-config.json");
+
+    // M4: the generator writes the copy; it refuses to overwrite a different one.
+    const gen = cli("first-promotion-config", "--new-ref", NEW_REF, "--out", cfgPath);
+    assert.equal(gen.status, 0, gen.err);
+    assert.deepEqual(JSON.parse(readFileSync(cfgPath, "utf8")), fpConfig);
+    assert.equal(cli("first-promotion-config", "--new-ref", NEW_REF, "--out", cfgPath).status, 0, "idempotent");
+    assert.match(cli("first-promotion-config", "--new-ref", "zyxwvutsrqponmlkjihg", "--out", cfgPath).err, /refusing to overwrite/);
+    assert.match(cli("first-promotion-config", "--new-ref", "vslwnntzzgpnmrpjipat").err, /previous project/);
+
+    const evidence = (ledgerText) => ["--repo", fx.dir, "--staging", "staging", "--main", "main", "--out-dir", out,
+        "--staging-build-info", w("staging-build-info.json", { gitSha: fx.stagingSha, gitBranch: "staging", vercelEnv: "preview", supabaseProjectRef: config.environments.staging.supabase_project_ref }),
+        "--check-runs", w("check-runs.json", greenCheckRuns(config, fx.stagingSha)), "--staging-ledger", w("staging-ledger.txt", all.join("\n")),
+        "--staging-orgs", w("staging-orgs.txt", [FIREFLY, ...ZZ].map((o) => `${o.id}|${o.status}|${o.name}`).join("\n")), "--staging-fingerprint", w("staging-fp.txt", fp),
+        "--production-build-info", w("production-build-info.json", { gitSha: fx.mainSha, gitBranch: "main", vercelEnv: "production", supabaseProjectRef: "vslwnntzzgpnmrpjipat" }),
+        "--production-ledger", w("production-ledger.txt", ledgerText), "--production-fingerprint", w("production-fp.txt", "tables|0\nrls_disabled|0\n")];
+
+    // Refusals: the committed config, a non-empty ledger, and the routine mode over the same evidence.
+    const committedCfg = cli("prepare", "--first-promotion", ...evidence(""));
+    assert.equal(committedCfg.status, 1);
+    assert.match(committedCfg.out, /previous_supabase_project_ref/);
+    const nonEmpty = cli("prepare", "--first-promotion", "--config", cfgPath, ...evidence("20270101000000\n"));
+    assert.equal(nonEmpty.status, 1);
+    assert.match(nonEmpty.out, /first_promotion_ledger_not_empty/);
+    const routine = cli("prepare", "--config", cfgPath, ...evidence(""));
+    assert.equal(routine.status, 1, "without the flag nothing changes: the old project ref and contract_not_last both block");
+    assert.match(routine.out, /contract_not_last/);
+    assert.ok(!existsSync(join(out, "manifest.json")), "no refused prepare writes a manifest");
+    rmSync(join(out, "audit.jsonl"), { force: true });
+
+    const prep = cli("prepare", "--first-promotion", "--config", cfgPath, ...evidence(""));
+    assert.equal(prep.status, 0, prep.out + prep.err);
+    const m = JSON.parse(readFileSync(join(out, "manifest.json"), "utf8"));
+    assert.equal(m.mode, FIRST_PROMOTION);
+    assert.deepEqual(m.migrations.expand, all);
+    assert.deepEqual(m.migrations.destructive_in_chain, ["20270201000000"]);
+    assert.equal(cli("apply-order", "--manifest", join(out, "manifest.json")).out, `${all.join("\n")}\n`);
+    assert.match(cli("runbook", "--manifest", join(out, "manifest.json"), "--config", cfgPath).out, /First-promotion runbook/);
+    assert.match(cli("runbook", "--manifest", join(out, "manifest.json")).err, /pass --config/);
+
+    assert.equal(cli("check-ledger", "--manifest", join(out, "manifest.json"), "--ledger", w("empty.txt", "")).status, 0);
+    assert.match(cli("check-ledger", "--manifest", join(out, "manifest.json"), "--ledger", w("one.txt", "20270101000000\n")).out, /no longer empty/);
+
+    const approval = w("approval.json", makeApproval({ environment: "production", approver: "Kelly", manifest: m, approvedAt: new Date().toISOString(), ttlHours: 1 }));
+    const rec = (...extra) => cli("record", "--audit", join(out, "audit.jsonl"), "--manifest", join(out, "manifest.json"), "--approval", approval, "--step", "schema.expand", "--status", "applied", "--detail", '{"version":"20270101000000"}', ...extra);
+    assert.match(rec().err, /pass --config/, "recording against the committed config is refused");
+    assert.equal(rec("--config", cfgPath).status, 0);
+    assert.equal(cli("verify-audit", join(out, "audit.jsonl")).status, 0);
+    const audit = readFileSync(join(out, "audit.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l));
+    assert.equal(audit.find((e) => e.step === "production.preflight").detail.mode, FIRST_PROMOTION);
+
+    const w17 = "99999999-0000-4000-8000-000000000017|retired|_w17_selftest_0bbaad43";
+    const census = "extension:btree_gist|present\nextension:pg_cron|present\nextension:pg_net|present\nextension:pgcrypto|present\nextension:supabase_vault|present\nextension:uuid-ossp|present\nbucket:org_documents|present\n";
+    const schema = (orgs) => cli("check-production", "--config", cfgPath, "--manifest", join(out, "manifest.json"), "--stage", "schema", "--ledger", w("c-ledger.txt", all.join("\n")), "--fingerprint", w("c-fp.txt", fp), "--orgs", w("c-orgs.txt", orgs), "--census", w("c-census.txt", census));
+    assert.equal(schema(w17).status, 0);
+    assert.match(schema(`${w17}\n${FIREFLY.id}|active|Firefly`).out, /exists before tenant creation/);
+    const final = (ref) => cli("check-production", "--config", cfgPath, "--manifest", join(out, "manifest.json"), "--build-info", w("a-build.json", { gitSha: fx.stagingSha, gitBranch: "main", vercelEnv: "production", supabaseProjectRef: ref }),
+        "--ledger", join(dir, "c-ledger.txt"), "--fingerprint", join(dir, "c-fp.txt"), "--orgs", w("a-orgs.txt", w17));
+    assert.equal(final(NEW_REF).status, 0);
+    assert.match(final("vslwnntzzgpnmrpjipat").out, new RegExp(`expected ${NEW_REF}`));
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(fx.root, { recursive: true, force: true });
+});
+
+test("emit-apply through a pipe delivers the whole file (a large migration is not cut at 64 KiB)", () => {
+    // B2 found it on the real chain: the CLI exited with output still buffered, so `emit-apply | psql`
+    // received 65,536 bytes of the 693 KB baseline migration. Pipes are asynchronous on macOS.
+    const big = `${Array.from({ length: 6000 }, (_, i) => `create table if not exists public.t${i} (id int);`).join("\n")}\n`;
+    assert.ok(big.length > 256 * 1024);
+    const fx = buildFixtureRepo({ release: { "20270201000000_big.sql": big } });
+    const dir = mkdtempSync(join(tmpdir(), "alloy-release-pipe-"));
+    const sql = execFileSync("git", ["-C", fx.dir, "show", "staging:supabase/migrations/20270201000000_big.sql"], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).trimEnd();
+    const blob = execFileSync("git", ["-C", fx.dir, "rev-parse", "staging:supabase/migrations/20270201000000_big.sql"], { encoding: "utf8" }).trim();
+    writeFileSync(join(dir, "manifest.json"), JSON.stringify({ migrations: { pending: [{ version: "20270201000000", name: "big", blob }] } }));
+    const piped = execFileSync("sh", ["-c", `node "${join(HERE, "..", "alloy-release.mjs")}" emit-apply --repo "${fx.dir}" --manifest "${join(dir, "manifest.json")}" --version 20270201000000 | wc -c`], { encoding: "utf8" });
+    assert.equal(Number(piped.trim()), Buffer.byteLength(wrapMigrationForApply({ version: "20270201000000", name: "big", sql })));
     rmSync(dir, { recursive: true, force: true });
     rmSync(fx.root, { recursive: true, force: true });
 });

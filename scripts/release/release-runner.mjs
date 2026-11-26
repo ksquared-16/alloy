@@ -12,12 +12,19 @@
 import {
     STEPS,
     ROLLBACK_STEP,
+    CONTRACT_SCOPE,
+    FIRST_PROMOTION,
+    LEDGER_TABLE_SQL,
     buildManifest,
     checkProduction,
+    checkFirstPromotionCensus,
     checkProductionBefore,
     checkStaging,
+    checkTargetSchema,
     hashRecord,
     identifyCandidate,
+    isFirstPromotion,
+    manifestConfigMismatch,
     planSchema,
     readBlob,
     verifyApproval,
@@ -30,7 +37,8 @@ function stop(audit, step, failures, extra = {}) {
     return { ok: false, step, failures, ...extra };
 }
 
-export async function prepare({ git, refs, config, environment, adapters, audit, now = isoNow }) {
+/** `firstPromotion` is the opt-in first-promotion mode (briefing D9): an empty target, the whole chain, the config copy's refs. */
+export async function prepare({ git, refs, config, environment, adapters, audit, now = isoNow, firstPromotion = false }) {
     const identified = identifyCandidate({ git, ...refs });
     if (!identified.ok) return stop(audit, "candidate.identify", identified.failures);
     const { candidate, migrations } = identified;
@@ -59,14 +67,19 @@ export async function prepare({ git, refs, config, environment, adapters, audit,
     audit.append("staging.verify", "pass", { verification_sha256: hashRecord(stagingVerification), warnings: sCheck.warnings });
 
     const pObs = await adapters.production.observe();
-    const before = checkProductionBefore({ config, candidate, buildInfo: pObs.buildInfo });
-    const plan = planSchema({ candidateMigrations: migrations, productionLedger: pObs.ledger, baseline: identified.baseline_migrations, sqlOf: (m) => readBlob(git, m.blob) });
+    const before = checkProductionBefore({ config, candidate, buildInfo: pObs.buildInfo, firstPromotion, fingerprint: pObs.fingerprint });
+    const plan = planSchema({ candidateMigrations: migrations, productionLedger: pObs.ledger, baseline: identified.baseline_migrations, sqlOf: (m) => readBlob(git, m.blob), firstPromotion });
     const failures = [...before.failures, ...plan.blockers];
-    if (failures.length) return stop(audit, "production.preflight", failures, { plan });
-    audit.append("production.preflight", "pass", { ledger_head: plan.ledger_head, pending: plan.pending.map((p) => `${p.version}:${p.class}`), warnings: plan.warnings });
+    if (failures.length) return stop(audit, "production.preflight", failures, { plan, ...(firstPromotion ? { mode: FIRST_PROMOTION } : {}) });
+    audit.append("production.preflight", "pass", {
+        ledger_head: plan.ledger_head,
+        pending: plan.pending.map((p) => `${p.version}:${p.class}`),
+        warnings: plan.warnings,
+        ...(firstPromotion ? { mode: FIRST_PROMOTION, new_supabase_project_ref: config.environments.production.supabase_project_ref, previous_supabase_project_ref: config.environments.production.previous_supabase_project_ref, destructive_in_chain: plan.destructive_in_chain.length } : {}),
+    });
 
     const manifest = {
-        ...buildManifest({ environment, identified, plan, stagingVerification, createdAt: now() }),
+        ...buildManifest({ environment, identified, plan, stagingVerification, createdAt: now(), config }),
         production_ledger_sha256: hashRecord([...pObs.ledger].sort()),
         expected_fingerprint: sObs.fingerprint ?? null,
         candidate_versions: migrations.map((m) => m.version).filter(Boolean),
@@ -85,10 +98,11 @@ export async function execute({ manifest, approval, config, environment, adapter
         return v.ok ? null : v.failures;
     };
     const byId = Object.fromEntries(STEPS.map((s) => [s.id, s]));
+    const first = isFirstPromotion(manifest);
 
     // owner.approval: nothing that touches production runs before this passes.
-    const denied = gate(byId["owner.approval"]);
-    if (denied) return stop(audit, "owner.approval", denied, { production_touched: false });
+    const denied = [...manifestConfigMismatch(manifest, config), ...(gate(byId["owner.approval"]) ?? [])];
+    if (denied.length) return stop(audit, "owner.approval", denied, { production_touched: false });
     audit.append("owner.approval", "pass", { approver: approval.approver.name, approval_sha256: hashRecord(approval), scope: approval.scope, expires_at: approval.expires_at });
 
     // production.snapshot
@@ -99,10 +113,22 @@ export async function execute({ manifest, approval, config, environment, adapter
 
     // schema.expand — the ledger must be the one the owner approved, then apply in version order.
     g = gate(byId["schema.expand"]);
+    // A first promotion applies the destructive files of the chain here too, so it needs their scope.
+    if (!g && first && manifest.migrations.destructive_in_chain.length) {
+        const v = verifyApproval({ approval, manifest, config, environment, now: now(), scopeNeeded: CONTRACT_SCOPE });
+        if (!v.ok) g = v.failures;
+    }
     if (g) return stop(audit, "schema.expand", g);
     const ledgerNow = (await p.observe()).ledger;
+    if (first && ledgerNow.length) {
+        return stop(audit, "schema.expand", [`first promotion: the target's ledger is no longer empty (${ledgerNow.length} version(s)); refusing to apply the chain`], { production_code_changed: false });
+    }
     if (hashRecord([...ledgerNow].sort()) !== manifest.production_ledger_sha256) {
         return stop(audit, "schema.expand", ["production's ledger changed since the approval; prepare and approve again"], { production_code_changed: false });
+    }
+    if (first) {
+        await p.ensureLedger(LEDGER_TABLE_SQL);
+        audit.append("schema.expand", "ledger_ready", { mode: FIRST_PROMOTION });
     }
     const applied = [];
     for (const version of manifest.migrations.expand) {
@@ -110,7 +136,7 @@ export async function execute({ manifest, approval, config, environment, adapter
         try {
             await p.applyMigration({ version, name: m.name, sql: sqlOf(m) });
             applied.push(version);
-            audit.append("schema.expand", "applied", { version, file: m.file });
+            audit.append("schema.expand", "applied", { version, file: m.file, ...(first ? { class: m.class } : {}) });
         } catch (err) {
             // Each file runs in one transaction with its ledger row, so the failing file left nothing.
             // The old build is still serving and every applied file is additive: hold, fix forward.
@@ -122,6 +148,20 @@ export async function execute({ manifest, approval, config, environment, adapter
         }
     }
     audit.append("schema.expand", "pass", { applied });
+
+    // First promotion, briefing §4 item 6: the census passes before any code points at the new project.
+    if (first) {
+        const o = await p.observe();
+        const census = p.census ? await p.census() : null;
+        const failures = [
+            ...checkTargetSchema({ config, ledger: o.ledger, expectedVersions: manifest.candidate_versions, fingerprint: o.fingerprint, expectedFingerprint: manifest.expected_fingerprint, orgs: o.orgs, firstPromotion: true }).failures,
+            ...(census ? checkFirstPromotionCensus(census) : ["census: not observed"]),
+        ];
+        if (failures.length) {
+            return stop(audit, "schema.expand", failures, { applied, production_code_changed: false, recovery: "hold: production still serves the previous build on the previous project; fix forward with a new candidate, or delete and recreate the new project" });
+        }
+        audit.append("schema.expand", "census_pass", { ledger: o.ledger.length, fingerprint_sha256: hashRecord(o.fingerprint), orgs: o.orgs, census });
+    }
 
     // code.deploy — compare-and-swap main from the approved previous SHA to the candidate.
     g = gate(byId["code.deploy"]);
@@ -138,7 +178,7 @@ export async function execute({ manifest, approval, config, environment, adapter
     const contract = new Set(manifest.migrations.contract);
     const verifyNow = async (expectedVersions, expectedFingerprint) => {
         const o = await p.observe();
-        return checkProduction({ config, candidate: manifest.candidate, buildInfo: o.buildInfo, ledger: o.ledger, expectedVersions, fingerprint: o.fingerprint, expectedFingerprint, orgs: o.orgs });
+        return checkProduction({ config, candidate: manifest.candidate, buildInfo: o.buildInfo, ledger: o.ledger, expectedVersions, fingerprint: o.fingerprint, expectedFingerprint, orgs: o.orgs, firstPromotion: first });
     };
     const v = await verifyNow(manifest.candidate_versions.filter((x) => !contract.has(x)), contract.size ? null : manifest.expected_fingerprint);
     if (!v.ok) {
@@ -163,6 +203,8 @@ export async function execute({ manifest, approval, config, environment, adapter
         const v2 = await verifyNow(manifest.candidate_versions, manifest.expected_fingerprint);
         if (!v2.ok) return stop(audit, "schema.contract", v2.failures, { recovery: "hold and fix forward; do not roll code back across a contract migration" });
         audit.append("schema.contract", "pass", {});
+    } else if (first) {
+        audit.append("schema.contract", "skip", { reason: "first promotion: the chain's destructive files ran in version order at schema.expand, on a project that served nothing", destructive_in_chain: manifest.migrations.destructive_in_chain.length });
     } else {
         audit.append("schema.contract", "skip", { reason: "no destructive migrations in this release" });
     }
