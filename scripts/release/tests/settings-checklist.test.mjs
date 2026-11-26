@@ -13,6 +13,7 @@ import { REPO_ROOT, scanSettings } from "../settings-inventory.mjs";
 
 const CHECKLIST = "docs/platform/runtime/environments-p1s-settings-checklist-2026-11-25.md";
 const BRIEFING = "docs/platform/runtime/environments-p1s-first-promotion-briefing-2026-11-25.md";
+const FINAL_PLAN = "docs/platform/runtime/environments-b4-final-cutover-plan-2026-11-25.md";
 const TIERS = ["web", "backend", "supabase"];
 const CLASSES = new Set(["R", "C", "O", "F", "A", "L", "S", "D", "X", "B", "P"]);
 
@@ -99,6 +100,24 @@ test("the first-promotion briefing: no credential, every settled decision, no da
     for (let i = 1; i <= 11; i++) assert.match(table, new RegExp(`^\\| \\*\\*D${i}\\*\\* \\|`, "m"), `D${i} is in the settled-decisions table`);
     assert.doesNotMatch(text, /\bOPEN-[A-Z]\b|\bD-[A-Z]\b|see report/, "a label that names no decision in this document");
     assert.doesNotMatch(text, /\b\d{1,2} (Nov|Dec)[a-z]*\b|\b(Nov|Dec)[a-z]* \d{1,2}\b|Tuesday|\b\d{2}:\d{2} (PT|UTC)\b/, "D8: the window is booked at step 6b, not fixed to a date");
+});
+
+test("the final cutover plan: no credential, no fixed date, every step and decision point, step 16 on the post-clock baseline", () => {
+    const text = readFileSync(join(REPO_ROOT, FINAL_PLAN), "utf8");
+    for (const [name, re] of CREDENTIAL_SHAPES) assert.doesNotMatch(text, re, name);
+    assert.doesNotMatch(text, /\b\d{1,2} (Nov|Dec)[a-z]*\b|\b(Nov|Dec)[a-z]* \d{1,2}\b|day\b.*\b\d{2}:\d{2} (PT|UTC)\b|\b\d{2}:\d{2} (PT|UTC)\b/, "D8: the window is booked at step 6b, not fixed to a date");
+    const window = text.split("### 2.2 The window")[1]?.split("\n## ")[0] ?? "";
+    for (const step of ["7", "8", "9", "10", "11", "12", "13", "14", "15", "15b", "16", "17"]) {
+        assert.match(window, new RegExp(`^\\| [0-9:]+[^|]*\\| \\*\\*${step}\\*\\* \\|`, "m"), `window step ${step} has a T+ row`);
+    }
+    for (const point of ["GO/NO-GO 1", "HOLD point", "KEEP / ROLL BACK", "STOP point"]) assert.ok(window.includes(`**${point}**`), point);
+    const before = text.split("### 2.1 Before the window")[1]?.split("### 2.2")[0] ?? "";
+    for (const step of ["1", "2", "3", "4", "5", "6", "6b"]) assert.match(before, new RegExp(`^\\| \\*\\*${step}\\*\\* \\|`, "m"), `step ${step}`);
+    for (const r of ["R-A", "R-B", "R-C", "R-D"]) assert.ok(text.includes(`**${r},`), `rollback point ${r}`);
+    assert.match(text, /--baseline "\$DIR\/census-before-step16\.txt"/, "16.6 verifies against the post-clock baseline");
+    const briefing = readFileSync(join(REPO_ROOT, BRIEFING), "utf8");
+    assert.doesNotMatch(briefing, /--baseline "\$DIR\/census-extras\.txt"/, "the briefing no longer verifies step 16 against step 9's census");
+    assert.ok(briefing.includes("environments-b4-final-cutover-plan-2026-11-25.md"), "the briefing names the final plan");
 });
 
 test("scanner: each detection rule, on a fixture tree", () => {

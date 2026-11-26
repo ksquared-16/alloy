@@ -3,7 +3,7 @@ owner: runtime
 status: proposed
 last_reviewed: 2026-11-25
 supersedes: []
-status_note: Briefing for objective WALDEN_ENVIRONMENTS_AND_PROMOTION_B9E42B66 (slice P1S) — the owner's single cutover plan for the first promotion, not doctrine. Nothing here authorizes a live action. Revised 2026-11-25 (third Development Lead review; owner decisions D1–D11, D8 timing as the earliest feasible approved window).
+status_note: Briefing for objective WALDEN_ENVIRONMENTS_AND_PROMOTION_B9E42B66 (slice P1S) — the owner's single cutover plan for the first promotion, not doctrine. Nothing here authorizes a live action. Revised 2026-11-25 (third Development Lead review; owner decisions D1–D11, D8 timing as the earliest feasible approved window). The ordered, timed form for the step-6b approval is the B4 final cutover plan.
 ---
 
 # Environments and promotion — first-promotion briefing (2026-11-25)
@@ -17,6 +17,11 @@ the [rebuild rehearsal](environments-p4-rebuild-and-integration-rehearsal-2026-1
 [P1](environments-p1-production-census-2026-11-25.md), [P2](environments-p2-production-snapshot-restore-2026-11-25.md),
 [P3](environments-p3-staging-classification-2026-11-25.md) and
 [deployment and environments](../governance/deployment-and-environments.md).
+
+**The final plan.** Slice B4 rehearsed the whole operation locally and ordered this briefing into one timed list for the
+step-6b approval: the [final cutover plan](environments-b4-final-cutover-plan-2026-11-25.md), with its evidence in
+[`environments-b4-dress-rehearsal-evidence-2026-11-25/`](environments-b4-dress-rehearsal-evidence-2026-11-25/). Its one
+correction to this briefing is step 16's census baseline (§5.6.1 16.6 and 16.R, §7).
 
 **How this was written.** From the repository only. No dashboard, service, database, credential or environment dump was
 read, and no runtime setting was changed. The offline evidence (git objects and the release tool run on local refs, no
@@ -411,7 +416,7 @@ The class **O** business settings (`ALLOY_CANCELLATION_FEE_CENTS`, `ALLOY_CANCEL
    transferred (P3 C15).
 5. **Checks after the import** (all must pass, recorded in the transcript):
    - Firefly's configuration is present: each allowlisted table holds the rows the export names;
-   - every table the export classifies as record or transaction holds exactly its step-9 baseline count;
+   - every table the export classifies as record or transaction holds exactly its baseline count (the census taken after step 15, §5.6.1);
    - orgs: Firefly, plus the `retired` W-17 org (D10), and nothing else; no ZZ Alloy QA org (`release-config.json`
      `tenancy.qa_fixture_orgs`); no `f17e0000-…` seed id;
    - Firefly has exactly one membership, the named admin's `admin` row; Auth has exactly that one user.
@@ -537,12 +542,24 @@ never copied), `written process:lead_management/enrollment`, then `✓ wrote <N>
 **Stop** on any `✗`: go to 16.R. (A re-run only creates what is absent; the B3 rehearsal's second apply printed
 `nothing to write: every item is already present (no-op)`.)
 
-**16.6: the §5.6 item-5 checks.** Take the census again with step 9's command, then verify against step 9's baseline:
+**The step-16 baseline (B4), taken at T+2:20 before 16.0.** Not step 9's census: the first `pg_cron` tick at step 14
+runs the chain's one-time `clock_activation_certification` (P4 F8) and writes one `scheduled_work_attempts` and one
+`scheduled_work_occurrences` row, which `census_write_set` would otherwise fail (B4 dress rehearsal, F2). Take it, and
+check that only the clock moved since step 9:
+
+```bash
+$REL emit-sql census | psql "$PRODUCTION_DB_URL_READONLY" -At -X -f - > "$DIR/census-before-step16.txt"
+diff "$DIR/census-extras.txt" "$DIR/census-before-step16.txt"   # only scheduled_work_attempts / _occurrences / _clock rows
+```
+
+**Stop** before 16.0 if the diff names any other table.
+
+**16.6: the §5.6 item-5 checks.** Take the census again with step 9's command, then verify against that baseline:
 
 ```bash
 $REL emit-sql census | psql "$PRODUCTION_DB_URL_READONLY" -At -X -f - > "$DIR/after-step16-census-extras.txt"
 npm run -s tenant:config:import -- verify "${I[@]}" --log "$DIR/step16-verify.log" \
-  --baseline "$DIR/census-extras.txt" --after-census "$DIR/after-step16-census-extras.txt" --release-config "$DIR/release-config.json"
+  --baseline "$DIR/census-before-step16.txt" --after-census "$DIR/after-step16-census-extras.txt" --release-config "$DIR/release-config.json"
 ```
 
 Expected, every line `PASS`, ending `✓ all <n> checks passed`:
@@ -551,9 +568,9 @@ Expected, every line `PASS`, ending `✓ all <n> checks passed`:
 |---|---|
 | `config_present` | `<N> item(s) present and equal` (re-planning the file finds every item present and equal) |
 | `work_units:lead_management` | every lane work unit the export names is active |
-| `baseline_counts` | every record, transaction and binding table, and every other step-9 table outside the import's write set, at its step-9 count |
+| `baseline_counts` | every record, transaction and binding table, and every other table outside the import's write set, at its baseline count |
 | `import_write_set` | (listing) the write-set tables that grew. Rehearsed: 20 tables: `orgs` +1, `user_roles` +1, `user_access_profiles` +1, `role_definitions` +4, `role_permission_grants` +160, the org's database defaults (`document_categories` +10, `document_types` +13, `document_type_versions` +13), the relationship fields (`field_section_definitions` 1, `option_sets` 1, `option_set_items` 10, `field_definitions` 9), `locations`, `customer_person_role_types`, `departments` 1, `business_process_drafts` 1, `business_process_revisions` 1, `configuration_publications` 1, `workflow_events` 1, `record_drawer_layouts` 1, plus `work_units` when lanes are derived |
-| `census_write_set` | every table whose count moved since step 9 is in the write set (this also sees tables empty at step 9) |
+| `census_write_set` | every table whose count moved since the baseline is in the write set (this also sees tables empty at the baseline) |
 | `orgs` | exactly `<ORG_ID>\|active\|Firefly Early Learning` and `<id>\|retired\|_w17_selftest_<hex>`; no ZZ Alloy QA or retired staging org |
 | `no_seed_ids` | no `f17e0000-…` id in any written table |
 | `memberships` | exactly `<admin-user-id>\|admin` |
@@ -570,12 +587,12 @@ connection):
 npm run -s tenant:rollback-sql | psql "$PRODUCTION_DB_URL" -X -v org_id="$ORG" -v org_name='Firefly Early Learning' -f - \
   > "$DIR/step16-rollback.txt" 2>&1; echo "rollback rc=$?"
 $REL emit-sql census | psql "$PRODUCTION_DB_URL_READONLY" -At -X -f - > "$DIR/after-rollback-census-extras.txt"
-diff "$DIR/census-extras.txt" "$DIR/after-rollback-census-extras.txt" && echo "census equals step 9"
+diff "$DIR/census-before-step16.txt" "$DIR/after-rollback-census-extras.txt" && echo "census equals the step-16 baseline"
 $REL emit-sql orgs | psql "$PRODUCTION_DB_URL_READONLY" -At -X -f - | diff "$DIR/census-orgs.txt" - && echo "orgs equal step 9"
 ```
 
 Expected: `rollback rc=0`, a `removed org <ORG_ID> ("Firefly Early Learning") from <k> table(s) …; <t> trigger(s)
-restored` notice, then both `equals step 9` lines. The SQL refuses before any change if the org is missing, not named as
+restored` notice, then the `equals the step-16 baseline` and `equal step 9` lines. The SQL refuses before any change if the org is missing, not named as
 given, not `active`, or is the W-17 org. It also refuses once any record or transaction table holds a row for the org
 (`window_closed`: the rollback window has closed, §7). It lifts only the enabled user triggers of the tables holding the
 org's rows (the guards that refuse deleting a used document category, an immutable revision or publication, a
@@ -641,7 +658,7 @@ needs no restoring because D2 leaves it unchanged. Rollback **points production 
 
 **If step 16 fails its checks.** Production is already verified. Stop. Either remove what step 16 wrote (the export names
 every row; the helper wrote one org, one membership and the relationship-field configuration; Auth holds one user) with §5.6.1 16.R, which is complete only when
-the census and the org list equal step 9's, or, if that cannot be shown complete, recreate the new project and repeat
+the census equals the step-16 baseline (taken after step 15) and the org list equals step 9's, or, if that cannot be shown complete, recreate the new project and repeat
 from step 9 in a later window booked as in step 6b.
 Rolling back to the old project is not needed for a step-16 failure.
 
@@ -701,8 +718,7 @@ paths and what `createOrgAndAssignAdmin` writes (P4 F6; M5); P3's classification
 
 - **Which tables are record or transaction tables.** The chain itself writes rows: P4's rebuilt census shows
   `mutation_events` 5 and `scheduled_work` 2, besides platform catalog tables (`rebuild/rebuilt-row-census.txt`). The
-  export names each table as configuration, record/transaction or platform, and the check compares against step 9's
-  baseline.
+  export names each table as configuration, record/transaction or platform, and the check compares against the baseline taken after step 15 (§5.6.1).
 - **Firefly's org id on the new project.** The helper's output names it; the export's rows are bound to it, not to the
   staging id. The import procedure takes it as an input rather than a constant.
 - **Alloy Bend on staging: resolved by B2 (`5ea249e5b`).** P3 lists a third staging org, Alloy Bend
