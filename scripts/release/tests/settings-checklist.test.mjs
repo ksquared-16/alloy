@@ -111,8 +111,23 @@ test("the final cutover plan: no credential, the owner's window, every step and 
     for (const d of ["Tue Dec 1", "Tue Dec 8", "Sun Nov 29", "09:00–12:00 PT"]) assert.ok(text.includes(d), d);
     const days = new Set([...text.matchAll(/\b(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]* (Nov|Dec) (\d{1,2})\b/g)].map((m) => `${m[1]} ${m[2]}`));
     for (const d of days) assert.ok(["Nov 27", "Nov 28", "Nov 29", "Dec 1", "Dec 8"].includes(d), `unexpected date ${d}`);
-    for (const o of ["O-PITR", "O-ADMIN", "O-WHEN", "O-OP", "O-LANES", "O-ROOMS"]) assert.match(text, new RegExp(`^\\| \\*\\*${o}\\*\\* \\|`, "m"), o);
-    assert.ok(text.includes("<STEP16_OPERATOR>"), "O-OP: the operator stays a placeholder until named");
+    assert.doesNotMatch(text, /no calendar date is fixed|booked at (step )?6b|date is booked/i, "O-WHEN: the date is decided, not booked at 6b");
+    const statusNote = text.match(/^status_note: (.*)$/m)?.[1] ?? "";
+    for (const d of ["Tue Dec 1, 09:00–12:00 PT", "Sun Nov 29", "Tue Dec 8, 09:00–12:00 PT"]) assert.ok(statusNote.includes(d), `status_note states ${d}`);
+    for (const o of ["O-PITR", "O-ADMIN", "O-WHEN", "D12", "O-LANES", "O-ROOMS"]) assert.match(text, new RegExp(`^\\| \\*\\*${o}\\*\\* \\|`, "m"), o);
+    // D12: a named human operator, not the Developer, types step 16 while the owner watches; the transcript is recorded.
+    assert.ok(text.includes("<operator-name>"), "D12: the operator stays a placeholder until the owner names them");
+    assert.doesNotMatch(text, /<STEP16_OPERATOR>|\*\*Operator\*\*: the Developer/, "D12: the operator is not the Developer");
+    assert.match(text, /^\| \*\*D12\*\* \|[^\n]*owner watches[^\n]*transcript is recorded/m, "D12 names who watches and the transcript");
+    assert.match(text, /^\| 2:25 \| \*\*16\*\* \| Operator `<operator-name>` \(D12\)/m, "step 16 is the named operator's");
+    assert.ok(text.includes("**Name the operator**"), "naming the operator is an owner open item");
+    // O-PITR and O-ADMIN are decided, not open.
+    assert.match(text, /^\| \*\*5\*\* \|[^\n]*enable PITR with 7-day retention/m, "step 5 enables 7-day PITR");
+    assert.ok(text.includes("(a paid add-on), enabled on the new project **before the window**"), "PITR is a paid add-on, before the window");
+    assert.doesNotMatch(text, /name Firefly's first admin|choose its backup/i, "neither the first admin nor the backup tier is still open");
+    for (const p of ["<admin-user-id>", "<admin-email>", "owner's own existing Auth account", "invites Firefly's staff"]) assert.ok(text.includes(p), p);
+    assert.ok(text.includes("17 later rooms") && text.includes("Work Unit Queue"), "rooms at the export review; lanes after step 16");
+    assert.ok(text.includes("No required check runs that test file"), "serviceClientPrincipalCheck: not a required check on the candidate");
     for (const g of ["(a) Owner dashboard actions", "(b) Owner-approved repository steps", "(c) Owner answers", "(d) Anything else"]) assert.ok(text.includes(`**${g}**`), g);
     for (const c of RELEASE_CONFIG.required_checks) assert.ok(text.includes(`\`${c}\``), `step 4 names required check ${c}`);
     const window = text.split("### 2.2 The window")[1]?.split("\n## ")[0] ?? "";
@@ -122,11 +137,14 @@ test("the final cutover plan: no credential, the owner's window, every step and 
     for (const point of ["GO/NO-GO 1", "HOLD point", "KEEP / ROLL BACK", "STOP point"]) assert.ok(window.includes(`**${point}**`), point);
     const before = text.split("### 2.1 Before the window")[1]?.split("### 2.2")[0] ?? "";
     for (const step of ["1", "2", "3", "4", "5", "6", "6b"]) assert.match(before, new RegExp(`^\\| \\*\\*${step}\\*\\* \\|`, "m"), `step ${step}`);
+    assert.match(before, /^\| \*\*Nov 29\*\* \| \*\*GO\/NO-GO 0\*\*[^\n]*Tue Dec 1, 09:00 PT[^\n]*Tue Dec 8, 09:00 PT/m, "the Nov 29 go/no-go selects Dec 1 or Dec 8");
     for (const r of ["R-A", "R-B", "R-C", "R-D"]) assert.ok(text.includes(`**${r},`), `rollback point ${r}`);
     assert.match(text, /--baseline "\$DIR\/census-before-step16\.txt"/, "16.6 verifies against the post-clock baseline");
     const briefing = readFileSync(join(REPO_ROOT, BRIEFING), "utf8");
     assert.doesNotMatch(briefing, /--baseline "\$DIR\/census-extras\.txt"/, "the briefing no longer verifies step 16 against step 9's census");
     assert.ok(briefing.includes("environments-final-cutover-plan-2026-11-26.md"), "the briefing names the final plan");
+    assert.match(briefing, /^\| \*\*M7\*\* \|[^\n]*PITR with 7 days retention \(a paid add-on\), enabled on the new project before the window/m, "briefing M7: PITR decided");
+    assert.doesNotMatch(briefing, /backup\/PITR tier|name Firefly's first admin|the owner named at step 6/, "the briefing no longer holds the tier or the first admin open");
 });
 
 test("scanner: each detection rule, on a fixture tree", () => {
