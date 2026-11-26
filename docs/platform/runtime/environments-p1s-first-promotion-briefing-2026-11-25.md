@@ -3,7 +3,7 @@ owner: runtime
 status: proposed
 last_reviewed: 2026-11-25
 supersedes: []
-status_note: Briefing for objective WALDEN_ENVIRONMENTS_AND_PROMOTION_B9E42B66 (slice P1S) — the owner's single cutover plan for the first promotion, not doctrine. Nothing here authorizes a live action. Revised 2026-11-25 (second Development Lead review; owner decisions D1–D11).
+status_note: Briefing for objective WALDEN_ENVIRONMENTS_AND_PROMOTION_B9E42B66 (slice P1S) — the owner's single cutover plan for the first promotion, not doctrine. Nothing here authorizes a live action. Revised 2026-11-25 (third Development Lead review; owner decisions D1–D11, D8 timing as the earliest feasible approved window).
 ---
 
 # Environments and promotion — first-promotion briefing (2026-11-25)
@@ -36,10 +36,12 @@ the full migration chain as P4 rehearsed (D2), through a narrow **first-promotio
 normal owner approval and the tamper-evident audit (D9). The **existing production project (`vslwnntzzgpnmrpjipat`) is not
 changed in any way** and is the rollback target (D2). Its org is not a real tenant, so nothing is read or carried from it,
 and no tenant exists before the operation (D3). Production runs staging's clock, `pg_cron` + `pg_net` (D4), and copies
-staging's flag values (D6). The W-17 self-test org is retired (D5, D10). Only after production verifies, Firefly is created
-and configured from a reviewed configuration-only allowlist export, with no household or person data, in one recorded
-step run from the Mac mini operator session with the owner present (D7, D11). The operation runs on **Tuesday 1 December
-2026, 09:00–12:00 PT (17:00–20:00 UTC)**, owner present with Vercel, Render and Supabase (D8).
+staging's flag values (D6). The W-17 self-test org is retired by a migration that staging runs first (D5, D10). Only after
+production verifies, the **existing** org helper creates Firefly and Firefly's reviewed configuration-only allowlist export
+is imported, with no customer, lead, child, person or transactional data, as one recorded step run from the Mac mini
+operator session with the owner present (D7, D11). The operation runs in the **earliest feasible three-hour window** after
+every prerequisite has closed, the reviews are recorded and the owner has approved this plan in its final form; weekends
+are allowed, and the owner is present with Vercel, Render and Supabase (D8). No calendar date is fixed in this document.
 
 ## Settled owner decisions
 
@@ -47,22 +49,23 @@ These are decisions, not open questions, assumptions or missing information. Not
 
 | ID | Decision | Where it lands |
 |---|---|---|
-| **D1** | Integrate ALY-14 E1–E4 into staging first, then rebuild the candidate | **Step 1** (the first operation step), then step 2. P4's candidate `ea06c21f3401` is retired |
-| **D2** | New Supabase project in `us-west-2`, rebuilt as rehearsed in P4; the existing project is left unchanged as rollback | Steps 5 and 9 (§4); rollback §7. Region matches the `pdx1` functions (checklist A.1) |
-| **D3** | The current production org is not a real tenant; no tenant is created before the operation | Nothing is read or carried from the old project. Steps 1–15 create no tenant. Closes P3 **B1** |
-| **D4** | Match staging's clock: `pg_cron` + `pg_net` | Steps 12–14 (§5.4). Vault URL, then Vault credential, unconditionally |
-| **D5** | Retire W-17 | Carried out by D10; checked in steps 9, 15 and 16 |
-| **D6** | Mirror staging's flag values | Step 6 copies every F key staging sets, at staging's value; step 10 enters them; the drawer-strip pair is set explicitly (§5.5) |
-| **D7** | After production verifies, create and configure Firefly from the reviewed configuration-only allowlist export. No customers, leads, contacts, children, records, transactions or other household or person data | Step 16, only after step 15 passes (§5.6) |
-| **D8** | Tuesday 1 December 2026, 09:00–12:00 Pacific; owner present with Vercel, Render and Supabase | The times in §3 |
-| **D9** | Add a narrow first-promotion mode to the release tool, tested offline, preserving the normal approval and the tamper-evident audit | Built before the window (M3); used at steps 7–9, 15 and 17 (§4) |
-| **D10** | Retire W-17 through a small migration, run through staging with E1–E4, and the same file chain to production | Written and merged to staging in step 1 (M2); applied in version order in step 9 |
-| **D11** | The tenant helper plus the configuration-only Firefly import is **one recorded step** after production verifies. It runs from the Mac mini operator session during the window, with the owner present. The owner does not type commands. The transcript is recorded. It is **not** an agent run against production | Step 16 (§5.6) |
+| **D1** | **Decided.** Integrate ALY-14 E1–E4 into staging first, then rebuild the candidate | **Step 1** (the first operation step), then step 2. P4's candidate `ea06c21f3401` is retired |
+| **D2** | **Decided.** New Supabase project in `us-west-2`, rebuilt as rehearsed in P4; the existing project is left untouched as the rollback target | Steps 5 and 9 (§4); rollback §7. Region matches the `pdx1` functions (checklist A.1) |
+| **D3** | **Decided.** No tenant exists before the operation; the current production org is not a real tenant | Nothing is read or carried from the old project. Steps 1–15 create no tenant. Closes P3 **B1** |
+| **D4** | **Decided.** The same clock setup as staging: `pg_cron` + `pg_net` | Steps 12–14 (§5.4). Vault URL, then Vault credential, unconditionally |
+| **D5** | **Decided.** Retire W-17 by migration | Carried out as D10 says; checked in steps 9, 15 and 16 |
+| **D6** | **Decided.** Match staging's flag values | Step 6 copies every F key staging sets, at staging's value; step 10 enters them; the drawer-strip pair is set explicitly (§5.5) |
+| **D7** | **Decided.** The first Firefly tenant is created only after the operation, from the approved configuration-only export. No customers, leads, contacts, children, persons, records, transactions or other household or transactional data | Step 16, only after step 15 passes (§5.6) |
+| **D8** | **Decided.** The earliest feasible window after every prerequisite (M1–M9, the C-rows), the step-6 reviews and the owner's final approval of this plan (step 6b). Not held to any earlier date. Weekends allowed. Owner present with Vercel, Render and Supabase | Step 6b books it; the window clock in §3 counts from its start, **T** |
+| **D9** | **Decided.** Before the cutover, add a narrow first-promotion mode to the release tool, tested offline, keeping the owner approval and the tamper-evident audit | Built and rehearsed before the window (M3); used at steps 7–9, 15 and 17 (§4) |
+| **D10** | **Decided.** W-17 is retired by a migration that runs through staging first (step 1); production then receives it through the same migration chain, in version order | Written and merged to staging in step 1 (M2); applied in its place in the chain at step 9 |
+| **D11** | **Decided.** During the window, after production verifies, the **existing** org helper (`createOrgAndAssignAdmin`, M5) creates Firefly and Firefly's reviewed configuration-only allowlist export is imported, as **one recorded step**, run from the Mac mini operator session with the owner present. The owner does not type commands. The session transcript is recorded. No customers, leads, children, persons or transactional data | Step 16 (§5.6) |
 
 ## 1. Prerequisites that must close before the window
 
 Each is something the plan needs that **does not exist yet**. None is closed by this document, and none may be reported
-closed without the evidence in the last column. Any open row at 09:00 is a no-go (step 7).
+closed without the evidence in the last column. Until all are closed, no window is booked (D8, step 6b); any row found
+open at T+0:00 is a no-go (step 7).
 
 | ID | Missing | Why it blocks | Evidence today | Closed when, by whom |
 |---|---|---|---|---|
@@ -70,7 +73,7 @@ closed without the evidence in the last column. Any open row at 09:00 is a no-go
 | **M2** | **No W-17 retirement migration exists.** No committed file sets `_w17_selftest_%` orgs to `retired` | D10. `check-production` fails on an unretired self-test org (`release-lib.mjs:429`); production may only receive migrations staging ran (`release-lib.mjs:149`) | P4 F3; `rebuild/w17-removal-trial.txt` (a plain delete fails on `document_category_in_use`; `status='retired'` works) | Step 1: the migration is merged with E1–E4 and staging's W-17 org reads `retired`. Developer |
 | **M3** | **The release tool has no first-promotion mode.** `plan` over an empty ledger is **blocked** (`contract_not_last`, 45 contract files among 557, the first `20260329210000`), and `production.preflight` expects production to serve the old `main` on the project named in `release-config.json` | D9. Without it, `prepare` writes no manifest, so `approve`, `emit-apply`, `record` and the hash-chained audit have nothing to bind | `plan-empty-ledger-p4-candidate.json`; P6 procedure *Limits* | The mode is committed with offline tests (`npm run test:release-procedure`) and rehearsed non-live. Developer, before step 5 |
 | **M4** | **`release-config.json` names the old production project** (`vslwnntzzgpnmrpjipat`) | Every check against production after cutover must expect the new ref (`checkBuildInfo` compares `supabaseProjectRef`) | `scripts/release/release-config.json`; `alloy-release.mjs:73` (`--config` overrides the file for one run) | Step 5: a config copy naming the new ref in the release directory. The committed file follows in the next release |
-| **M5** | **No production tenant helper exists.** The only org-creation paths are the dev helper `web/lib/dev/createOrgAndAssignAdmin.ts` (used by `web/scripts/ensureSharedQaTenant.ts`) and `/api/admin/dev/create-org`, which needs `DEV_TENANT_SPINUP_ENABLED`, a key that must never be set on production (checklist X row) | D11. Step 16 cannot create the Firefly org without it | P4 F6 | A reviewed helper, committed and tested offline, that creates one org and nothing else, without that key. Developer and Database Engineer, before step 6 |
+| **M5** | **The existing org helper has no reviewed production invocation.** D11 uses the existing helper `web/lib/dev/createOrgAndAssignAdmin.ts`; no new helper is written. It inserts one `orgs` row (industry `childcare`, seeded by `20260430211000`), one `admin` membership through `create_membership_with_access_profile`, and the relationship-field configuration (`field_section_definitions`, `option_sets`, `option_set_items`, `field_definitions`); it needs an existing `auth.users` id. Its current callers are not usable here: `/api/admin/dev/create-org` needs `DEV_TENANT_SPINUP_ENABLED`, which must never be set on production (checklist X row); `web/scripts/ensureSharedQaTenant.ts` creates only the frozen QA orgs (and refuses the production ref it knows); `npm run dev:tenant:childcare` also seeds demo opportunities, which D7 forbids | D11. Step 16 has no approved command without it | P4 F6; the files named | The exact step-16 invocation (a direct call of `createOrgAndAssignAdmin` from `web/`, with the new project's URL and service-role key in the Mac mini session only, never in a file) is written into the step-16 command list and approved by the Development Lead and the Database Engineer at step 6. Developer |
 | **M6** | **No green CI run on the rebuilt candidate.** P6 step 2 requires each `required_checks` entry to succeed on the candidate SHA; the check names still need confirming against real check-runs (P6 owner action 4) | Staging verification cannot pass without it | P4 *Integration through a pull request*; P6 owner action 4 | Step 4. Developer; the push and PR are authorized actions |
 | **M7** | **No read-only role on any project; the new project's backup/PITR tier is not chosen** (P6 owner actions 5–6) | Observations need a read path that cannot write; after step 16, backups are the new project's only recovery | P6 owner actions 5–6 | Step 5. Owner in Supabase |
 | **M8** | **The configuration-only allowlist export and its import do not exist.** P3 R1 requires re-authoring through the app's write paths from a reviewed configuration-only listing, never a row dump; the repo's only Firefly configuration capture is defective (P3 C14); several Firefly configuration counts were never observed on hosted staging (P3 C2, C13, C14, C16: BLOCKED on STG-CENSUS) | D7, D11. Step 16 has nothing reviewed to import | P3 §C, R1 | The export and the import procedure exist and are approved by the Development Lead and the Database Engineer (step 6) |
@@ -102,35 +105,44 @@ exactly that reason). The rebuilt candidate's tree then equals staging's, and id
 `release-config.json` or `scripts/release/` changes for this.
 
 **Stop condition.** If, at step 2 or step 7, `identify` without `--allow-tree-diff` exits non-zero for any reason, stop.
-Do not add the flag, do not edit `release-config.json`; fix staging and rebuild the candidate (back to step 1). If that
-cannot happen before 30 November, the operation moves to a later date.
+Do not add the flag, do not edit `release-config.json`; fix staging and rebuild the candidate (back to step 1). No window
+is booked until step 2 passes; if it fails at step 7, the window is cancelled and the next feasible one is booked (D8).
 
 ## 3. Ordered steps — the single cutover plan
 
-Steps 1–6 come before the window; 7–17 are the window. **11:20 is the last keep/roll-back decision** before tenant work.
+Steps 1–6b come before the window, in order, with no calendar date: each starts when the one before it is done. Steps 7–17
+are the window, timed from its start **T** (D8: the earliest feasible slot booked at step 6b; weekends allowed; three hours).
+**T+2:20 is the last keep/roll-back decision** before tenant work.
 
-| # | When (PT) | Step | Done when | Who |
+**Staging migration restriction (kept until the ALY-14 cutover).** The owner's restriction on staging migrations stays in
+force until step 17 closes the window. The only migrations that reach staging before then are the ones step 1 carries
+(E1–E4's and the D10 W-17 retirement). Any other migration waits until after the cutover. The step-2 freeze on merges to
+staging is stricter still and runs over the same period.
+
+| # | When | Step | Done when | Who |
 |---|---|---|---|---|
-| **1** | before 30 Nov | **D1 + D10: integrate into `staging`.** One **merge** of the branch carrying all of E1–E4 (M1), the W-17 retirement migration (M2) and main's retired `vacilando-tier2.yml` (§2). This branch merges into `origin/staging` cleanly (`git merge-tree` exit 0, re-run offline at this revision); it is 8 commits behind staging, so it is a merge that keeps staging's commits, never a reset (`staging-integration-check.txt`). The migration is applied to staging through staging's normal migration path | Staging `/api/build-info` serves the merge; staging CI green; staging's W-17 org reads `retired`; staging's ledger holds the new migration | Developer; the push is an authorized action (CLAUDE.md *Git / deploy*) |
-| **2** | before 30 Nov | **Freeze `staging`, rebuild the candidate, identify it.** No merges to staging until 12:00 on 1 Dec (P4 O7). Re-fetch; P4 `candidate/build-candidate.sh <origin/staging> <origin/main>`; `release identify` **without** `--allow-tree-diff` (§2) | New candidate SHA recorded; `main` fast-forwards to it; identify exit 0. Otherwise the §2 stop condition | Developer |
-| **3** | before 30 Nov | **Recount and recheck the candidate.** P4 `candidate/migration-counts.sh` (557 plus what step 1 adds, including the W-17 migration as the highest-numbered new file it introduces); no `schedule:` in any candidate workflow; `git grep DrawerSummaryStripBoundary` re-run (§5.5) | Count and head version recorded: this is the list step 9 applies | Developer |
-| **4** | before 30 Nov | **Green CI on the candidate (M6).** Push it to a non-deploying branch, open the PR to `main` marked *do not merge* (P4 *Integration through a pull request*); confirm `required_checks` names against real check-runs | Every `required_checks` name has a `success` check-run on the candidate SHA | Developer; authorized push/PR |
-| **5** | before 30 Nov | **New Supabase project, `us-west-2`.** Record its ref. Read-only role and backup/PITR tier (M7). Release directory `releases/<date>-<sha12>/` with the config copy naming the new ref (M4). The first-promotion mode (M3) rehearsed non-live against an empty local ledger. **The old project is not touched** | Ref, role, tier, directory and rehearsal output recorded | Owner in Supabase; Developer for the rehearsal |
-| **6** | before 30 Nov | **Collect and review.** Into the owner's secret store, not the repo: every F key staging's Vercel Preview scope sets, **with its value**, and the drawer-strip pair's staging behaviour (D6, §5.5); staging's clock ticking (C-CLOCK-1); staging's Render cron (C-MSG-1); O-row values (C-O-1); production's current Vercel deployment id and Render values and deploy (C-RB-1, C-RB-2). The tenant helper (M5) and the allowlist export with its import procedure (M8) are approved by the Development Lead and the Database Engineer, and written as the step-16 command list | Every §6 row marked; both reviewers' approval recorded | Owner, Developer, Development Lead, Database Engineer |
-| **7** | 09:00 | **Go/no-go**: M1–M9 closed with evidence. Then **candidate identification** (P6 step 1) after a fetch, no allowance; **staging verification** (P6 step 2): staging serves the head the candidate was built from, on `ikaxilmwmrmbagoidedu`; check-runs green; ledger equals the candidate's migrations; tenancy passes. **Production before**: `/api/build-info` serves `main` on the old project; C-RB-1 and C-RB-2 re-read | All M closed; identify exit 0; staging passes; production unchanged | Owner, Developer |
-| **8** | 09:25 | **Owner approval** (P6 step 4) through the first-promotion mode's manifest (D9) | Approval recorded in the audit chain; P6 TTL (4 h default) covers the window | Owner |
-| **9** | 09:30 | **Schema apply on the new project** (§4), then the census (§4 item 6) | Census passes by 10:30, or hold | Developer through the release tool; owner present |
-| **10** | 10:30 | **Platform settings.** Supabase §5.1; Vercel Production scope §5.2 (with the D6 flags and the drawer-strip pair); Render §5.3, saved without deploying. If C-REN-2 shows that saving Render's environment redeploys the service, Render's values move to step 11 and are saved immediately before its Render deploy, so the old backend never runs against the new project. `NEXT_PUBLIC_*` before step 11's build | §5.1–5.3 rows set and re-read | Owner in the dashboards |
-| **11** | 10:45 | **Release** (P6 step 7). `git ls-remote origin main` equals step 2's base; fast-forward `main` to the candidate, never `--force`; poll production `/api/build-info` until it serves the candidate on the **new** ref; then deploy Render on the candidate commit. This first `main` deploy also registers the `web/vercel.json` Vercel Cron (§5.4) | Both services serve the candidate | Developer; owner in Render |
-| **12** | 11:00 | **Vault `scheduled_work_wake_url`** in the new project = the production origin + `/api/scheduled-work/wake` (§5.4). Unconditional | Secret present, names the production origin | Owner in Supabase |
-| **13** | 11:03 | **Vault `scheduled_work_wake_credential`** = production `INTERNAL_CRON_TOKEN`, after step 12 reads back correctly (§5.4). Unconditional | Secret present | Owner in Supabase |
-| **14** | 11:05 | **Observe the clock** (§5.4): the `pg_cron` tick reaches production; Vercel Cron calls are refused | `wake_count` advances; 2xx from production in `net._http_response`; no staging target | Developer |
-| **15** | 11:10 | **Production verification** (P6 step 8): §8 post-checks; `release check-production --stage final --config <new-ref config>`. **11:20: keep, or roll back now (§7)** | All §8 rows pass | Owner decides |
-| **16** | 11:25 | **D7 + D11: create and configure Firefly, one recorded step.** From the Mac mini operator session, owner present, transcript recorded: the tenant helper (M5) creates the Firefly org, then the reviewed configuration-only import (M8) runs, then the §5.6 checks. The owner does not type commands. Not an agent run against production. Only after step 15 passed. If it cannot finish by 11:50, stop; production stays verified with no tenant, and step 16 moves to a later session | §5.6 checks pass; transcript in the release directory | Owner present; the operator at the Mac mini session |
-| **17** | 11:50 | **Record** (P6 step 10): evidence and the step-16 transcript into the release directory; `verify-audit`. 12:00 window closes; staging freeze lifts | Directory complete; `verify-audit` exit 0 | Developer |
+| **1** | before the window | **D1 + D10: integrate into `staging`.** One **merge** of the branch carrying all of E1–E4 (M1), the W-17 retirement migration (M2) and main's retired `vacilando-tier2.yml` (§2). This branch merges into `origin/staging` cleanly (`git merge-tree` exit 0, re-run offline at this revision); it is 8 commits behind staging, so it is a merge that keeps staging's commits, never a reset (`staging-integration-check.txt`). The migration is applied to staging through staging's normal migration path | Staging `/api/build-info` serves the merge; staging CI green; staging's W-17 org reads `retired`; staging's ledger holds the new migration | Developer; the push is an authorized action (CLAUDE.md *Git / deploy*) |
+| **2** | after step 1 | **Freeze `staging`, rebuild the candidate, identify it.** No merges to staging from here until step 17 closes the window (P4 O7); the staging migration restriction above holds over the same period. Re-fetch; P4 `candidate/build-candidate.sh <origin/staging> <origin/main>`; `release identify` **without** `--allow-tree-diff` (§2) | New candidate SHA recorded; `main` fast-forwards to it; identify exit 0. Otherwise the §2 stop condition | Developer |
+| **3** | after step 2 | **Recount and recheck the candidate.** P4 `candidate/migration-counts.sh` (557 plus what step 1 adds, including the W-17 migration as the highest-numbered new file it introduces); no `schedule:` in any candidate workflow; `git grep DrawerSummaryStripBoundary` re-run (§5.5) | Count and head version recorded: this is the list step 9 applies | Developer |
+| **4** | after step 3 | **Green CI on the candidate (M6).** Push it to a non-deploying branch, open the PR to `main` marked *do not merge* (P4 *Integration through a pull request*); confirm `required_checks` names against real check-runs | Every `required_checks` name has a `success` check-run on the candidate SHA | Developer; authorized push/PR |
+| **5** | after step 4 | **New Supabase project, `us-west-2`.** Record its ref. Read-only role and backup/PITR tier (M7). Release directory `releases/<date>-<sha12>/` with the config copy naming the new ref (M4). The first-promotion mode (M3) rehearsed non-live against an empty local ledger. **The old project is not touched** | Ref, role, tier, directory and rehearsal output recorded | Owner in Supabase; Developer for the rehearsal |
+| **6** | after step 5 | **Collect and review.** Into the owner's secret store, not the repo: every F key staging's Vercel Preview scope sets, **with its value**, and the drawer-strip pair's staging behaviour (D6, §5.5); staging's clock ticking (C-CLOCK-1); staging's Render cron (C-MSG-1); O-row values (C-O-1); production's current Vercel deployment id and Render values and deploy (C-RB-1, C-RB-2). The owner names Firefly's first admin account (the `auth.users` id M5's helper needs). The helper invocation (M5) and the allowlist export with its import procedure (M8) are approved by the Development Lead and the Database Engineer, and written as the step-16 command list | Every §6 row marked; both reviewers' approval recorded | Owner, Developer, Development Lead, Database Engineer |
+| **6b** | after step 6 | **Final plan approval and window booking (D8).** The Development Lead confirms M1–M9 and the C-rows closed with evidence. The owner approves this plan in its final form (with the rebuilt candidate SHA, the new ref and the step-16 command list) and books the earliest three-hour slot at which the owner can be present with Vercel, Render and Supabase; a weekend slot is allowed. The slot's start is **T** | Approval and T recorded in the release directory | Owner; Development Lead |
+| **7** | T+0:00 | **Go/no-go**: M1–M9 closed with evidence. Then **candidate identification** (P6 step 1) after a fetch, no allowance; **staging verification** (P6 step 2): staging serves the head the candidate was built from, on `ikaxilmwmrmbagoidedu`; check-runs green; ledger equals the candidate's migrations; tenancy passes. **Production before**: `/api/build-info` serves `main` on the old project; C-RB-1 and C-RB-2 re-read | All M closed; identify exit 0; staging passes; production unchanged | Owner, Developer |
+| **8** | T+0:25 | **Owner approval** (P6 step 4) through the first-promotion mode's manifest (D9) | Approval recorded in the audit chain; P6 TTL (4 h default) covers the window | Owner |
+| **9** | T+0:30 | **Schema apply on the new project** (§4), then the census (§4 item 6) | Census passes by T+1:30, or hold | Developer through the release tool; owner present |
+| **10** | T+1:30 | **Platform settings.** Supabase §5.1; Vercel Production scope §5.2 (with the D6 flags and the drawer-strip pair); Render §5.3, saved without deploying. If C-REN-2 shows that saving Render's environment redeploys the service, Render's values move to step 11 and are saved immediately before its Render deploy, so the old backend never runs against the new project. `NEXT_PUBLIC_*` before step 11's build | §5.1–5.3 rows set and re-read | Owner in the dashboards |
+| **11** | T+1:45 | **Release** (P6 step 7). `git ls-remote origin main` equals step 2's base; fast-forward `main` to the candidate, never `--force`; poll production `/api/build-info` until it serves the candidate on the **new** ref; then deploy Render on the candidate commit. This first `main` deploy also registers the `web/vercel.json` Vercel Cron (§5.4) | Both services serve the candidate | Developer; owner in Render |
+| **12** | T+2:00 | **Vault `scheduled_work_wake_url`** in the new project = the production origin + `/api/scheduled-work/wake` (§5.4). Unconditional | Secret present, names the production origin | Owner in Supabase |
+| **13** | T+2:03 | **Vault `scheduled_work_wake_credential`** = production `INTERNAL_CRON_TOKEN`, after step 12 reads back correctly (§5.4). Unconditional | Secret present | Owner in Supabase |
+| **14** | T+2:05 | **Observe the clock** (§5.4): the `pg_cron` tick reaches production; Vercel Cron calls are refused | `wake_count` advances; 2xx from production in `net._http_response`; no staging target | Developer |
+| **15** | T+2:10 | **Production verification** (P6 step 8): §8 post-checks; `release check-production --stage final --config <new-ref config>`. **T+2:20: keep, or roll back now (§7)** | All §8 rows pass | Owner decides |
+| **16** | T+2:25 | **D7 + D11: create and configure Firefly, one recorded step.** Only after step 15 passed. In the Mac mini operator session, owner present, transcript recorded, the step-6 command list runs as approved: the owner adds Firefly's named admin account in the new project's Supabase Auth (a dashboard action, not a command), the existing helper (M5) creates the Firefly org and that account's admin membership, then the reviewed configuration-only import (M8) runs, then the §5.6 checks. The owner does not type commands. If it cannot finish by T+2:50, stop; production stays verified with no tenant, and step 16 moves to a later session with the owner present | §5.6 checks pass; transcript in the release directory | The Mac mini operator session runs it; owner present |
+| **17** | T+2:50 | **Record** (P6 step 10): evidence and the step-16 transcript into the release directory; `verify-audit`. T+3:00 the window closes; the staging freeze and the staging migration restriction lift | Directory complete; `verify-audit` exit 0 | Developer |
 
-The apply is not timed by any record (P4's 29 s was a local container). If step 9 has not passed by **10:30**, hold.
-Production still serves the old build on the old project, so holding costs nothing but the date.
+The apply is not timed by any record (P4's 29 s was a local container). If step 9 has not passed by **T+1:30**, hold.
+Production still serves the old build on the old project, so holding costs nothing but the window; the next feasible
+window is booked as in step 6b.
 
 ## 4. Step 9: the schema on the new project (D2, D9)
 
@@ -285,17 +297,25 @@ the rebuilt candidate.
 The class **O** business settings (`ALLOY_CANCELLATION_FEE_CENTS`, `ALLOY_CANCELLATION_FEE_WITHIN_HOURS`,
 `ALLOY_DEFAULT_BUSINESS_TIMEZONE`, `NEXT_PUBLIC_BOOKING_PATH`) are not flags, so D6 does not cover them (C-O-1).
 
-### 5.6 Firefly: tenant helper and configuration-only import (D7, D11) — step 16
+### 5.6 Firefly: the existing org helper and the configuration-only import (D7, D11) — step 16
 
 1. **When.** Only after step 15 passes, inside the window, as **one recorded step**: helper, import, checks.
-2. **Where and how.** From the Mac mini operator session, with the owner present. The owner does not type commands. The
-   session transcript is recorded and filed in the release directory at step 17. It is not an agent run against
-   production. The commands are the step-6 list, reviewed in advance; nothing is improvised in the window.
-3. **What is created.** The tenant helper (M5) creates the Firefly org and nothing else. The import (M8) then re-authors
-   Firefly's **configuration** from the reviewed allowlist export, through the app's write paths (P3 R1), never as a raw row
-   copy. The allowlist is drawn from P3 §C's KEEP-CONFIG items.
-4. **What is never carried** (D7): customers, leads, contacts, children, records, transactions, or any other household or
-   person data (P3 L1–L4, L12: households, guardians, children, cases, participations, tasks, work items, charges,
+2. **Where and how.** In the Mac mini operator session, with the owner present. The owner does not type commands; the
+   session runs the step-6 command list exactly as the Development Lead and the Database Engineer approved it, and nothing
+   is improvised in the window. The session transcript is recorded and filed in the release directory at step 17.
+3. **What is created, in order.**
+   1. Firefly's first admin account, the one the owner named at step 6, added by the owner in the new project's
+      Supabase Auth dashboard (the helper needs its `auth.users` id). It is a sign-in identity, not a `persons` row or
+      household record.
+   2. The existing helper `createOrgAndAssignAdmin` (M5), called directly with that id, industry `childcare` and Firefly's
+      name: one `orgs` row, one `admin` membership, and the relationship-field configuration. Not `dev:tenant:childcare`
+      (it seeds demo opportunities) and not `/api/admin/dev/create-org` (`DEV_TENANT_SPINUP_ENABLED` stays unset). The
+      helper prints the new org id.
+   3. The import (M8): Firefly's **configuration** re-authored from the reviewed allowlist export, bound to the new org id,
+      through the app's write paths (P3 R1), never as a raw row copy. The allowlist is drawn from P3 §C's KEEP-CONFIG
+      items.
+4. **What is never carried** (D7, D11): customers, leads, contacts, children, persons, records, transactions, or any
+   other household, person or transactional data (P3 L1–L4, L12: households, guardians, children, cases, participations, tasks, work items, charges,
    agreements, payments, documents and storage objects, threads, messages, outbox, process instances, audit and mutation
    events). Also never: anything from the old project (D3), the ZZ Alloy QA orgs (L5), QA identities and run fixtures (L8,
    L9), demo and seed rows (L10, L11). Provider bindings and merchants are re-provisioned per environment, never
@@ -304,9 +324,11 @@ The class **O** business settings (`ALLOY_CANCELLATION_FEE_CENTS`, `ALLOY_CANCEL
    - Firefly's configuration is present: each allowlisted table holds the rows the export names;
    - every table the export classifies as record or transaction holds exactly its step-9 baseline count;
    - orgs: Firefly, plus the `retired` W-17 org (D10), and nothing else; no ZZ Alloy QA org (`release-config.json`
-     `tenancy.qa_fixture_orgs`); no `f17e0000-…` seed id.
+     `tenancy.qa_fixture_orgs`); no `f17e0000-…` seed id;
+   - Firefly has exactly one membership, the named admin's `admin` row; Auth has exactly that one user.
 
-Nothing else is in this step. Provider bindings, merchants, Auth mail, users and invites are tenant setup that follows it.
+Nothing else is in this step. Provider bindings, merchants, Auth mail, further users and invites are tenant setup that
+follows it.
 
 ## 6. Checklist issues carried forward
 
@@ -351,7 +373,7 @@ needs no restoring because D2 leaves it unchanged. Rollback **points production 
 | New project | Keep for diagnosis, or delete and recreate | — |
 | Old project | Nothing to do: never changed | — |
 
-**Roll back when, at the 11:20 decision:**
+**Roll back when, at the T+2:20 decision:**
 
 1. production `/api/build-info` does not serve the candidate on the new ref, or is not `vercelEnv` `production` on `main`;
 2. `check-production` fails (ledger, fingerprint versus staging, a table without RLS, a QA or staging-seed org, a
@@ -363,8 +385,9 @@ needs no restoring because D2 leaves it unchanged. Rollback **points production 
 **Hold, do not roll back**, when step 9 fails (§4 item 7). Nothing user-facing has changed.
 
 **If step 16 fails its checks.** Production is already verified. Stop. Either remove what step 16 wrote (the export names
-every row, and the helper created one org), or, if that cannot be shown complete, recreate the new project and repeat from
-step 9 in a later session. Rolling back to the old project is not needed for a step-16 failure.
+every row; the helper wrote one org, one membership and the relationship-field configuration; Auth holds one user), or, if
+that cannot be shown complete, recreate the new project and repeat from step 9 in a later window booked as in step 6b.
+Rolling back to the old project is not needed for a step-16 failure.
 
 **When the rollback window closes.** Rolling back after step 16 discards only Firefly's configuration, which the reviewed
 export can re-apply. It really closes when the first real record (a customer, lead, contact, child or transaction) is
@@ -373,7 +396,8 @@ restore into a new project first, then decide, with a new owner approval.
 
 ## 8. Pre- and post-checks
 
-**Pre (step 7):** M1–M9 closed with their evidence; step 2's freeze held; `main` unmoved; identify exit 0 with no
+**Pre (step 7):** M1–M9 closed with their evidence; step 6b's final approval and T recorded; step 2's freeze and the
+staging migration restriction held; `main` unmoved; identify exit 0 with no
 allowance; staging verified; production serves old `main` on the old ref; C-RB-1, C-RB-2, C-RB-3, C-REN-1, C-REN-2,
 C-CLOCK-1, C-FLAG-1, C-MSG-1, C-O-1 recorded; step 16's command list approved.
 
@@ -401,8 +425,8 @@ fallback and dual header (`20261002120000:48`, `20261003120000:38-44`); the wake
 the `vercel.json` cron and its absence on `main` (P4 H2); the clock doctrine (`deployment-and-environments.md:107-135`);
 the W-17 org and its delete/retire trial (P4 F3); `check-production`'s acceptance of a `retired` self-test org
 (`release-lib.mjs:429`); the identify gate and its measured failure (§2); the drawer-flag readers, defaults and lack of
-runtime callers (§5.5); the planner block on an empty ledger (`plan-empty-ledger-p4-candidate.json`); the dev-only org
-creation paths (P4 F6); P3's classification of configuration and records.
+runtime callers (§5.5); the planner block on an empty ledger (`plan-empty-ledger-p4-candidate.json`); the org-creation
+paths and what `createOrgAndAssignAdmin` writes (P4 F6; M5); P3's classification of configuration and records.
 
 **Settled by the owner, not assumptions:** D1–D11.
 
@@ -424,14 +448,20 @@ creation paths (P4 F6); P3's classification of configuration and records.
   export names each table as configuration, record/transaction or platform, and the check compares against step 9's
   baseline.
 - **Firefly's org id on the new project.** The helper's output names it; the export's rows are bound to it, not to the
-  staging id.
+  staging id. The import procedure takes it as an input rather than a constant.
 
-## 10. Owner decisions still open
+## 10. Owner actions, and what is still open
 
-**None of D1–D11 is re-opened here.** One point falls outside them: D11 fixes *where* step 16 runs (the Mac mini
-operator session), that the owner is present and does not type, that the transcript is recorded and that it is not an
-agent run, but it does not name **who operates the keyboard**. Step 6's command list needs that name on its operator
-line. This is the only owner question left; everything else in §1 is work or evidence, not a choice.
+**No decision is open.** D1–D11 are decided and none is re-opened here. What remains on the owner's side is work and
+presence, in plan order:
+
+1. Authorize the step-1 staging merge and the step-4 candidate push and PR (CLAUDE.md *Git / deploy*).
+2. Step 5: create the `us-west-2` project, its read-only role, and choose its backup/PITR tier (M7).
+3. Step 6: the dashboard reads (C-FLAG-1, C-CLOCK-1, C-MSG-1, C-O-1, C-RB-1/2/3, C-REN-1/2) into the owner's secret store,
+   and name Firefly's first admin account (M5).
+4. Step 6b: approve this plan in its final form and book T, the earliest feasible slot (D8).
+5. The window: be present with Vercel, Render and Supabase; give the step-8 approval; set §5.1–§5.3 at step 10 and the
+   Vault secrets at steps 12–13; make the T+2:20 keep or roll-back call; watch step 16 without typing.
 
 ## 11. What this briefing does not do
 
@@ -439,4 +469,5 @@ line. This is the only owner question left; everything else in §1 is work or ev
   it (checklist F).
 - No push, PR, merge, deploy or fetch, and no hosted service of any kind. The rebuilt candidate does not exist yet.
 - No migration was written (M2), and no change was made to the app, the release tool, `release-config.json` or any
-  workflow file (M3, M4, M9). The tenant helper and the export (M5, M8) were not written or run.
+  workflow file (M3, M4, M9). The helper invocation and the export (M5, M8) were not written, and the helper was not run.
+- It fixes no calendar date. The window is booked at step 6b (D8).

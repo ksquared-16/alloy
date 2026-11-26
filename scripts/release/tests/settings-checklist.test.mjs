@@ -98,6 +98,7 @@ test("the first-promotion briefing: no credential, every settled decision, no da
     const table = text.split("## Settled owner decisions")[1]?.split("\n## ")[0] ?? "";
     for (let i = 1; i <= 11; i++) assert.match(table, new RegExp(`^\\| \\*\\*D${i}\\*\\* \\|`, "m"), `D${i} is in the settled-decisions table`);
     assert.doesNotMatch(text, /\bOPEN-[A-Z]\b|\bD-[A-Z]\b|see report/, "a label that names no decision in this document");
+    assert.doesNotMatch(text, /\b\d{1,2} (Nov|Dec)[a-z]*\b|\b(Nov|Dec)[a-z]* \d{1,2}\b|Tuesday|\b\d{2}:\d{2} (PT|UTC)\b/, "D8: the window is booked at step 6b, not fixed to a date");
 });
 
 test("scanner: each detection rule, on a fixture tree", () => {
