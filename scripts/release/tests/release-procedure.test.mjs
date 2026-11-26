@@ -113,6 +113,12 @@ test("classify: a destructive statement inside a DO block runs at migration time
         "do $$ begin execute format('alter table %I drop column y', 'x'); end $$;",
         "do $outer$ begin execute $q$ delete from public.x $q$; end $outer$;",
         "truncate table public.x, public.y restart identity;",
+        // Milestone QA: TRUNCATE that starts a dynamic-SQL string was classed expand.
+        "do $$ begin execute format('truncate table %I', t); end $$;",
+        "do $$ begin execute ('truncate public.t'); end $$;",
+        "do $$ begin execute 'truncate ' || quote_ident(t); end $$;",
+        "do $$ begin execute 'select 1; truncate public.t'; end $$;",
+        "do $$ begin execute format('grant select on %I to anon; truncate %I', t, t); end $$;",
     ]) {
         assert.equal(classifyMigrationSql(sql).class, "contract", sql);
     }
@@ -130,6 +136,27 @@ test("classify: TRUNCATE as a privilege name is not a truncate", () => {
     const sql = "do $$ begin execute format('revoke insert, update, delete, truncate on table public.%I from anon', 'x'); "
         + "if has_table_privilege('anon', 'public.x', 'SELECT,TRUNCATE,TRIGGER') then raise exception 'x'; end if; end $$;\nrevoke truncate on public.x from anon;";
     assert.equal(classifyMigrationSql(sql).class, "expand");
+});
+
+test("classify: a GRANT privilege list, plain or a quoted privilege CSV, is not a truncate", () => {
+    for (const sql of [
+        "grant select, insert, update, delete, truncate, references, trigger on public.x to service_role;",
+        "alter default privileges in schema public grant truncate on tables to service_role;",
+        "do $$ begin execute format('grant %s on table public.%I to service_role', 'SELECT, INSERT, UPDATE, DELETE, TRUNCATE', 'x'); end $$;",
+        "do $$ begin execute 'grant truncate on public.x to service_role'; end $$;",
+    ]) {
+        assert.equal(classifyMigrationSql(sql).class, "expand", sql);
+    }
+});
+
+test("classify: a privilege CSV outside a grant, or a privilege list without ON, is not excluded", () => {
+    for (const sql of [
+        "do $$ begin execute format('%s public.%I', 'TRUNCATE', 'x'); end $$;",
+        "do $$ begin perform 1 where 'truncate' = any(array['SELECT']); end $$;",
+        "do $$ begin execute 'grant select to x; truncate public.x'; end $$;",
+    ]) {
+        assert.equal(classifyMigrationSql(sql).class, "contract", sql);
+    }
 });
 
 test("classify: the repo's DO-block delete migration is contract", () => {

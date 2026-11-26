@@ -186,13 +186,23 @@ const CREATES_ROUTINE = /\bcreate\s+(?:or\s+replace\s+)?(?:function|procedure)\b
  * CREATE FUNCTION/PROCEDURE is stripped: a DELETE in a trigger body is code, not a migration-time
  * delete. Any other dollar-quoted body (a DO block) runs at migration time, so it is scanned like
  * the statement around it — recursively, so a function created inside a DO block is still code.
- * Inside such a body string literals are kept as their contents, because `execute 'drop table …'`
- * is how DO blocks drop things; at the top level they are blanked.
+ * Inside such a body string literals are kept as their contents, between STR_OPEN and STR_CLOSE,
+ * because `execute 'drop table …'` is how DO blocks drop things; at the top level they are blanked.
  *
- * `full` is what the migration does when it runs (destructive checks); `top` also blanks DO bodies,
- * because a statement inside one is normally behind its own existence guard (idempotency checks).
+ * `marked` is what the migration does when it runs, with those string marks (destructive checks);
+ * `top` also blanks DO bodies, because a statement inside one is normally behind its own existence
+ * guard (idempotency checks).
  */
 function scanMigrationSql(sql, inBody = false) {
+    const { marked, top } = scanMigrationSqlMarked(sql, inBody);
+    return { marked, full: marked.replace(STR_MARKS, " "), top };
+}
+
+const STR_OPEN = "\u0002";
+const STR_CLOSE = "\u0003";
+const STR_MARKS = /[\u0002\u0003]/g;
+
+function scanMigrationSqlMarked(sql, inBody) {
     let full = "";
     let top = "";
     let stmt = "";
@@ -219,7 +229,7 @@ function scanMigrationSql(sql, inBody = false) {
                 } else content += sql[j++];
             }
             i = j + 1;
-            emit(inBody ? ` ${content} ` : "''");
+            emit(inBody ? ` ${STR_OPEN}${content.replace(STR_MARKS, " ")}${STR_CLOSE} ` : "''");
         } else if (ch === "$" && (DOLLAR_QUOTE.lastIndex = i, DOLLAR_QUOTE.test(sql))) {
             const tag = sql.slice(i, DOLLAR_QUOTE.lastIndex);
             const end = sql.indexOf(tag, i + tag.length);
@@ -228,7 +238,7 @@ function scanMigrationSql(sql, inBody = false) {
             if (CREATES_ROUTINE.test(stmt.toLowerCase())) {
                 emit(" $$body$$ ");
             } else {
-                full += ` ${scanMigrationSql(body, true).full} `;
+                full += ` ${scanMigrationSqlMarked(body, true).marked} `;
                 top += " $$body$$ ";
                 stmt += " $$body$$ ";
             }
@@ -238,7 +248,7 @@ function scanMigrationSql(sql, inBody = false) {
             i += 1;
         }
     }
-    return { full: full.toLowerCase(), top: top.toLowerCase() };
+    return { marked: full.toLowerCase(), top: top.toLowerCase() };
 }
 
 /** What a migration does when it runs: comments, top-level strings and routine bodies stripped; DO-block bodies kept. */
@@ -251,13 +261,57 @@ const DESTRUCTIVE = [
     ["drop column", /\bdrop\s+column\b/],
     ["drop schema", /\bdrop\s+schema\b/],
     ["drop type", /\bdrop\s+type\b/],
-    // Not the privilege name: `revoke delete, truncate on …`, `privilege_type in (…, 'TRUNCATE')`.
-    ["truncate", /(?<![,(]\s*)\btruncate\b(?!\s*(?:,|\)|\bon\b))/],
+    ["truncate", { test: (full, marked) => truncatesAtMigrationTime(marked) }],
     ["delete rows", /\bdelete\s+from\b/],
     ["rename", /\brename\s+(?:column\s+)?(?:\w+\s+)?to\b/],
     ["column type change", /\balter\s+column\s+\w+\s+(?:set\s+data\s+)?type\b/],
     ["set not null", /\bset\s+not\s+null\b/],
 ];
+
+const PRIVILEGE = "(?:select|insert|update|delete|truncate|references|trigger|usage|create|connect|temporary|temp|execute|maintain|all(?:\\s+privileges)?)";
+// The privilege list of a GRANT/REVOKE, up to the word being tested: `revoke insert, delete, ` + truncate + ` on …`.
+const PRIVILEGE_LIST_BEFORE = new RegExp(`\\b(?:grant|revoke)\\s+(?:grant\\s+option\\s+for\\s+)?(?:${PRIVILEGE}\\s*,\\s*)*$`);
+const PRIVILEGE_LIST_AFTER = /^\s*(?:,|on\b)/;
+const PRIVILEGE_CSV = new RegExp(`^\\s*${PRIVILEGE}\\s*(?:,\\s*${PRIVILEGE}\\s*)*$`);
+const isPrivilegeListAt = (before, after) => PRIVILEGE_LIST_BEFORE.test(before) && PRIVILEGE_LIST_AFTER.test(after);
+
+/**
+ * TRUNCATE is also a privilege name, so it cannot be a plain pattern. Every `truncate` the migration
+ * runs is destructive — a statement, one inside an `execute` string (`execute 'truncate …'`,
+ * `execute ('truncate …')`, `execute format('truncate table %I', t)`), or any quoted string that
+ * begins with it — except the two forms that only name the privilege: a GRANT/REVOKE privilege list
+ * before ON, and a quoted privilege CSV ('SELECT, INSERT, TRUNCATE') in a statement that grants or
+ * revokes. A string that merely mentions it and is not executed (`has_table_privilege(…, 'SELECT,TRUNCATE')`)
+ * runs nothing. A bare 'TRUNCATE' outside a grant (`privilege_type in (…, 'TRUNCATE')`) begins with
+ * it, so it is contract: a false contract costs one approval scope.
+ */
+function truncatesAtMigrationTime(marked) {
+    // Statements end at a `;` outside the string marks; each is a list of [isString, text] parts.
+    const statements = [[]];
+    for (const m of marked.matchAll(/\u0002([^\u0003]*)\u0003|[^;\u0002]+|;/g)) {
+        if (m[0] === ";") statements.push([]);
+        else statements.at(-1).push(m[1] !== undefined ? [true, m[1]] : [false, m[0]]);
+    }
+    for (const parts of statements) {
+        const grants = parts.some(([, t]) => /\b(?:grant|revoke)\b/.test(t));
+        let code = "";
+        for (const [isString, text] of parts) {
+            for (const hit of text.matchAll(/\btruncate\b/g)) {
+                const after = text.slice(hit.index + hit[0].length);
+                if (!isString) {
+                    if (!isPrivilegeListAt(code + text.slice(0, hit.index), after)) return true;
+                    continue;
+                }
+                const before = text.slice(0, hit.index).split(";").at(-1);
+                if (isPrivilegeListAt(before, after.split(";")[0])) continue;
+                if (grants && PRIVILEGE_CSV.test(text)) continue;
+                if (!before.trim() || /\bexecute\b/.test(code)) return true;
+            }
+            code += isString ? " '' " : text;
+        }
+    }
+    return false;
+}
 
 const NOT_IDEMPOTENT = [
     ["create table without IF NOT EXISTS", /\bcreate\s+table\s+(?!if\s+not\s+exists)/],
@@ -271,8 +325,8 @@ const NOT_IDEMPOTENT = [
  * scope; a false `expand` would run a destructive change while the old code is still serving.
  */
 export function classifyMigrationSql(sql) {
-    const { full, top } = scanMigrationSql(sql);
-    const destructive = DESTRUCTIVE.filter(([, re]) => re.test(full)).map(([label]) => label);
+    const { marked, full, top } = scanMigrationSql(sql);
+    const destructive = DESTRUCTIVE.filter(([, re]) => re.test(full, marked)).map(([label]) => label);
     const idempotency = NOT_IDEMPOTENT.filter(([, re]) => re.test(top)).map(([label]) => label);
     return { class: destructive.length ? "contract" : "expand", destructive, idempotency_warnings: idempotency };
 }
