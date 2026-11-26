@@ -12,10 +12,10 @@ alloy-ro1-a: seeded org 93667019-bd28-49b5-a688-acc9bb1e0a19 with one site (as p
   ledger-if-present          postgres rc=0 lines=558  | alloy_readonly rc=0 lines=558  | EQUAL sha256 8f56a396ace0
   fingerprint                postgres rc=0 lines=6    | alloy_readonly rc=0 lines=6    | EQUAL sha256 ac485ca01f55
   census                     postgres rc=0 lines=30   | alloy_readonly rc=0 lines=30   | EQUAL sha256 da5bca8eb8db
-  orgs                       postgres rc=0 lines=2    | alloy_readonly rc=0 lines=2    | EQUAL sha256 f3a2e9cd26eb
-  tenant-config-export       postgres rc=0 lines=1    | alloy_readonly rc=0 lines=1    | EQUAL sha256 3275d404f1d8
+  orgs                       postgres rc=0 lines=2    | alloy_readonly rc=0 lines=2    | EQUAL sha256 eb2fd7274792
+  tenant-config-export       postgres rc=0 lines=1    | alloy_readonly rc=0 lines=1    | EQUAL sha256 ac354de93994
   control (same SELECT grants, NOBYPASSRLS): orgs lines=0 (alloy_readonly 2); export org="org" : null locations="locations" : [
-  refusals: 29 refused, 0 allowed; census unchanged
+  refusals: 31 refused, 0 allowed; census unchanged
   public reach (read-only off): 5 of 5 paths succeeded; check row 2 then: session settings|WRONG: {default_transaction_read_only=off,s; after a re-run: session settings|ok
 ## case B: staging (the chain already applied; the role script after it, then run a second time)
 alloy-ro1-b: PostgreSQL 17.6 on aarch64-unknown-linux-gnu; platform schemas: gotrue_rc=0 storage_rc=0; networks=[alloy-ro1-int ] internal=true
@@ -27,10 +27,10 @@ alloy-ro1-b: role script ran: 9 of 9 checks ok; WRONG rows: 0
   ledger-if-present          postgres rc=0 lines=558  | alloy_readonly rc=0 lines=558  | EQUAL sha256 8f56a396ace0
   fingerprint                postgres rc=0 lines=6    | alloy_readonly rc=0 lines=6    | EQUAL sha256 ac485ca01f55
   census                     postgres rc=0 lines=30   | alloy_readonly rc=0 lines=30   | EQUAL sha256 c3e6441dc3e7
-  orgs                       postgres rc=0 lines=2    | alloy_readonly rc=0 lines=2    | EQUAL sha256 e61b70a7d69b
-  tenant-config-export       postgres rc=0 lines=1    | alloy_readonly rc=0 lines=1    | EQUAL sha256 b63284bed63e
+  orgs                       postgres rc=0 lines=2    | alloy_readonly rc=0 lines=2    | EQUAL sha256 55be0e9cd11d
+  tenant-config-export       postgres rc=0 lines=1    | alloy_readonly rc=0 lines=1    | EQUAL sha256 0b94c085394c
   control (same SELECT grants, NOBYPASSRLS): orgs lines=0 (alloy_readonly 2); export org="org" : null locations="locations" : [
-  refusals: 29 refused, 0 allowed; census unchanged
+  refusals: 31 refused, 0 allowed; census unchanged
   public reach (read-only off): 5 of 5 paths succeeded; check row 2 then: session settings|WRONG: {default_transaction_read_only=off,s; after a re-run: session settings|ok
-## result: 74 passed, 0 failed
+## result: 78 passed, 0 failed
 teardown: containers=[] networks=[]

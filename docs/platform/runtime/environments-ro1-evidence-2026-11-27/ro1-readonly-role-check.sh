@@ -171,6 +171,9 @@ refusals() {  # <container> <dir>
   refuse $C "$R" "SET read_only off; drop table public.locations" "drop table public.locations" off
   refuse $C "$R" "SET read_only off; create function public.ro1_f" "create function public.ro1_f() returns int language sql as 'select 1'" off
   refuse $C "$R" "SET read_only off; create index on public.orgs" "create index ro1_ix on public.orgs (name)" off
+  echo "## the owner's step-5 check (owner guide, step 5, item 4), exactly" >> "$R"
+  refuse $C "$R" "owner check 1: create table supabase_migrations.ro_check" "create table supabase_migrations.ro_check (i int)"
+  refuse $C "$R" "owner check 2: SET read_only off; the same" "create table supabase_migrations.ro_check (i int)" off
   echo "## the role cannot widen itself" >> "$R"
   refuse $C "$R" "alter role alloy_readonly reset read_only" "alter role alloy_readonly reset default_transaction_read_only"
   refuse $C "$R" "set role postgres" "set role postgres"

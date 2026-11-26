@@ -71,7 +71,7 @@ policies change `policies_md5` and the fingerprint would no longer equal staging
 with `PGOPTIONS='-c default_transaction_read_only=on'`, as the export already does. That keeps the session read-only,
 but loses the privilege wall below, so it needs the owner's decision.
 
-## 2. Results (both cases, 74 checks, 0 failed)
+## 2. Results (both cases, 78 checks, 0 failed)
 
 | | Case A: new project (empty; script, then the chain) | Case B: staging (chain applied; script after it, twice) |
 |---|---|---|
@@ -79,7 +79,7 @@ but loses the privilege wall below, so it needs the owner's decision.
 | Chain, as `postgres` | 558 files, ledger 558, head `20261223090000`; the script was **not** run again: its check table, re-read, is 9 of 9 `ok` (`checks-after-chain.txt`) | 558 files, head `20261223090000`, before the script |
 | Step 7 reads before the chain | `ledger-if-present` empty and fingerprint `tables\|0`, equal to `postgres`'s | — |
 | `ledger`, `ledger-if-present` (558 lines), `fingerprint`, `census` (30 lines), `orgs`, export | each **byte-for-byte equal** to `postgres`'s, exit 0 | each byte-for-byte equal, exit 0 |
-| Refusals (`refusals.txt`) | 29 refused, 0 allowed; `postgres`'s census unchanged | 29 refused, 0 allowed; census unchanged |
+| Refusals (`refusals.txt`) | 31 refused, 0 allowed; `postgres`'s census unchanged | 31 refused, 0 allowed; census unchanged |
 
 The export ran as `tenant:config:export` runs it (`PGOPTIONS=-c default_transaction_read_only=on`, `-q -A -t -v org_id=…`).
 A local org row (`93667019-…`, one site) stands in for Firefly's.
@@ -94,6 +94,8 @@ A local org row (`93667019-…`, one site) stands in for Firefly's.
 - DDL with read-only off: CREATE TABLE and CREATE FUNCTION in public get `permission denied for schema public`. CREATE
   SCHEMA gets `permission denied for database postgres`. ALTER TABLE, DROP TABLE and CREATE INDEX get
   `must be owner of table …`.
+- The owner's step-5 check (guide, step 5, item 4), exactly: `create table supabase_migrations.ro_check` is refused by
+  the read-only transaction, and with read-only off by `permission denied for schema supabase_migrations`.
 - Widening itself: `SET ROLE postgres` is refused, and so is `ALTER ROLE` in the default session.
 - Writing SECURITY DEFINER functions (owned by `postgres`), with read-only on or off: `consume_rate_limit`,
   `document_configuration_seed` and `certification_reset_execute` get `permission denied for function …`. The
@@ -117,7 +119,8 @@ case 5 of 5 succeeded):
    The script's check row 2 then says `WRONG`, and running the script again restores it (`ok`).
 
 None of these writes to a public table, the ledger or Storage, and none can call a writing function. They are why the
-URL is a secret held only in the owner's secret store, and why no command in the plan or the runbook sets `default_transaction_read_only`.
+URL is a secret held only in the owner's secret store, and why no read in the plan or the runbook sets
+`default_transaction_read_only` (only the owner's step-5 check does, to show the privilege refusal).
 
 ## 4. Connection strings and `fp_target`
 

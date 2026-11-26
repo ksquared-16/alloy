@@ -38,6 +38,11 @@ REFUSED  SET read_only off; create function public.ro1_f            rc=1  ERROR:
          sql: set default_transaction_read_only = off; -- then, as its own statement: create function public.ro1_f() returns int language sql as 'select 1'
 REFUSED  SET read_only off; create index on public.orgs             rc=1  ERROR:  must be owner of table orgs
          sql: set default_transaction_read_only = off; -- then, as its own statement: create index ro1_ix on public.orgs (name)
+## the owner's step-5 check (owner guide, step 5, item 4), exactly
+REFUSED  owner check 1: create table supabase_migrations.ro_check   rc=1  ERROR:  cannot execute CREATE TABLE in a read-only transaction
+         sql: create table supabase_migrations.ro_check (i int)
+REFUSED  owner check 2: SET read_only off; the same                 rc=1  ERROR:  permission denied for schema supabase_migrations
+         sql: set default_transaction_read_only = off; -- then, as its own statement: create table supabase_migrations.ro_check (i int)
 ## the role cannot widen itself
 REFUSED  alter role alloy_readonly reset read_only                  rc=1  ERROR:  cannot execute ALTER ROLE in a read-only transaction
          sql: alter role alloy_readonly reset default_transaction_read_only

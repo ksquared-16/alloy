@@ -3,7 +3,7 @@ owner: runtime
 status: proposed
 last_reviewed: 2026-11-26
 supersedes: []
-status_note: Owner's step-by-step guide to every Vercel, Render and Supabase dashboard action in the first promotion (objective WALDEN_ENVIRONMENTS_AND_PROMOTION_B9E42B66), in the order of the final cutover plan. Written for the owner's 2026-11-26 decision (D12) that the owner does every dashboard step personally. Placeholders only; no value appears here. Nothing here authorizes a live action.
+status_note: Owner's step-by-step guide to every Vercel, Render and Supabase dashboard action in the first promotion (objective WALDEN_ENVIRONMENTS_AND_PROMOTION_B9E42B66), in the order of the final cutover plan. Written for the owner's 2026-11-26 decision (D12) that the owner does every dashboard step personally. Placeholders only; no value appears here. Revised 2026-11-27 (slice RO1): step 5's project is created (ref tjziptdknxdajzauctha, us-west-2, SMTP through Resend), backups are daily for 7 days with no PITR (O-BACKUPS), and the read-only role has click-by-click steps for the new project and staging. Nothing here authorizes a live action.
 ---
 
 # Environments and promotion — owner dashboard guide (2026-11-26)
@@ -43,12 +43,14 @@ step, so you can see where you are in the plan.
 
 | Entry | What it is | Filled at |
 |---|---|---|
-| `NEW` (the new project's ref) | Not a secret; you also tell the Developer | Step 5 |
+| `NEW` (the new project's ref) | Not a secret: `tjziptdknxdajzauctha` | Step 5 (done) |
 | New project URL and `anon` key | The anon key ships to the browser, but keep it with the others | Step 5 |
 | New project `service_role` key | Secret | Step 5 |
 | `PRODUCTION_DB_URL` | Secret: the new project's `postgres` connection, port 5432 | Step 5 |
-| `PRODUCTION_DB_URL_READONLY` | Secret: the new project's read-only role, port 5432 | Step 5 |
-| `STAGING_DB_URL_READONLY` | Secret: staging's read-only role | Before step 6 |
+| `alloy_readonly` password, new project | Secret: the read-only role's password on the new project | Step 5 |
+| `alloy_readonly` password, staging | Secret: the read-only role's password on staging (a different one) | Step 5 |
+| `PRODUCTION_DB_URL_READONLY` | Secret: the new project's read-only role, session pooler, port 5432 | Step 5 |
+| `STAGING_DB_URL_READONLY` | Secret: staging's read-only role, session pooler, port 5432 | Step 5 |
 | The four new signing secrets | Secret (see *Before step 10*) | Before step 10 |
 | Provider keys, for each capability going live | Secret (see *Before step 10*) | Before step 10 |
 | C-FLAG-1, C-CLOCK-1, C-CLOCK-2, C-MSG-1, C-O-1, C-RB-1, C-RB-2, C-RB-3, C-REN-1, C-REN-2 | Your step-6 dashboard reads | Step 6 |
@@ -57,6 +59,11 @@ step, so you can see where you are in the plan.
 ## Part 1. Before the window
 
 ### Step 5 (by Sat Nov 28). Create the new Supabase project
+
+**Done 2026-11-26.** The new project's ref is **`tjziptdknxdajzauctha`**, its region is **`us-west-2`**, email login is on
+with SMTP through **Resend** (sender verified on `workwithalloy.com`), and backups are **daily, kept 7 days, with no
+point-in-time recovery** (your decision, O-BACKUPS in the plan). The Developer has checked the config copy for this ref.
+What follows is kept as the record of how it was done.
 
 **Where:** the Supabase dashboard, your organization, **New project**.
 
@@ -73,32 +80,88 @@ secret. The Developer then runs the config copy (plan step 5), which must name y
 **If it doesn't work:** if the region is wrong, delete this new project (only this one) and create it again. If the
 config copy refuses the ref, the Developer tells you why; do not touch the old project to fix it.
 
-### Step 5. Turn on point-in-time recovery, 7 days (O-PITR)
+### Step 5. Check the backups (O-BACKUPS)
 
-**Where:** the new project's add-ons and backup settings (the checklist calls them *Database → backups / PITR*).
+**Where:** the new project, *Database → Backups*.
 
-**Enter:** point-in-time recovery with **7 days** of retention. It is a paid add-on, and it needs a compute add-on as
-well, so add both now (plan §4 (a) 1).
+**Enter:** nothing. There is no add-on to buy now: you decided on daily backups, kept 7 days, and **no** point-in-time
+recovery (PITR). A restore goes back to the last daily backup, so it can lose up to a day of changes.
 
-**Check:** the backup page shows PITR on, with 7-day retention. Before the window, it shows a restore point. Note
-"PITR on, 7 days" in your secret store beside `NEW`.
+**Check:** the page lists daily backups, kept 7 days. Note "daily backups, 7 days" in your secret store beside `NEW`.
 
-**If it doesn't work:** if the add-on is not offered or is refused, stop and tell the Development Lead before step 6b:
-the plan needs PITR before the window (M7), so the window cannot start without it.
+**Later, not in the window:** turn on 7-day PITR on the new project **before the first tenant with live customer data
+(families, attendance or billing) goes live**.
 
-### Step 5. Create the read-only role
+**If it doesn't work:** if the page shows no daily backups, tell the Development Lead before step 6b.
 
-**Where:** the new project's **SQL Editor**.
+### Step 5. Create the read-only role, on the new project and on staging
 
-**Enter:** the statement that creates the read-only role. **This repository does not hold that statement yet** (P6
-owner action 5 says no read-only role exists in any record here). Ask the Database Engineer for the reviewed statement
-before step 5, paste it into the SQL Editor, and run it. Choose the role's password in your secret store.
+You do this twice: first on the **new** project `tjziptdknxdajzauctha`, then on **staging** `ikaxilmwmrmbagoidedu`. The
+steps are the same. The old project `vslwnntzzgpnmrpjipat` is never one of them.
 
-**Check:** the Database Engineer confirms the role cannot write. Its connection details go into your secret store as
-`PRODUCTION_DB_URL_READONLY` (next step).
+The statement is the file
+[`environments-readonly-role-2026-11-27.sql`](environments-readonly-role-2026-11-27.sql). It creates a role named
+`alloy_readonly` that can read but never write, and it holds **no password or other secret**. The Developer gives you
+the file. Running it again is safe: it changes nothing that is already right, and it never touches the password.
 
-**If it doesn't work:** an error from the statement means stop and send the error text (never a password) to the
-Database Engineer.
+**1. Run the file.**
+
+- **Where:** the Supabase dashboard. Open the project, and check that the ref in the browser's address
+  (`…/project/<ref>/…`) is the one you mean. In the left menu, open **SQL Editor**, then start a **New query**.
+- **Enter:** paste the whole file into the empty query, and click **Run**.
+- **Check:** a table of 10 rows appears below. Rows 1 to 9 each say `ok`. On the new project, row 7 says
+  `ok (no ledger table yet …)`, which is right: step 9 creates that table. Row 10 is a note, not an error: it lists what
+  Supabase lets every role do, which the role can use only if it deliberately switches off read-only.
+- **If it doesn't work:** if the run stops with an error, or any of rows 1 to 9 says `WRONG`, stop. Send the Developer
+  the error or that row's text. The SQL Editor keeps what you pasted as a saved query, which is fine: it holds no secret.
+
+**2. Set the role's password.** This happens in the Roles page, **never** in the SQL Editor: the SQL Editor saves what
+you type, so a password typed there would stay in your saved queries.
+
+- **Where:** the same project, left menu **Database → Roles**. Find the row `alloy_readonly` and open its menu (`⋯`).
+  Choose **Reset password**.
+- **Enter:** a new long password made of **letters and digits only**: use the dialog's *Generate a password* button, or
+  generate one in your secret store. Save it in your secret store **first** (one entry per project, see the table
+  above), then confirm. With letters and digits only, the dashboard turns the password into a one-way hash in your
+  browser before sending it, so the password itself never reaches the database or its logs. It also needs no special
+  encoding in the connection string.
+- **Check:** the dialog closes with no error.
+- **If it doesn't work:** if there is no *Reset password* for `alloy_readonly`, stop and ask the Developer. Do not set
+  the password with SQL instead.
+
+**3. Build the connection string.** You do this in your secret store, not in any dashboard field.
+
+- **Where:** the same project, the **Connect** button at the top of the dashboard, the **Session pooler** string. It
+  looks like `postgresql://postgres.<ref>:[YOUR-PASSWORD]@<pooler-host>:5432/postgres`. On the new project, the host is
+  in `us-west-2`, for example `aws-0-us-west-2.pooler.supabase.com`. Copy staging's host from staging's own *Connect*
+  panel.
+- **Enter:** copy that string into your secret store. Change the user at the start, `postgres.<ref>`, to
+  `alloy_readonly.<ref>`. Replace `[YOUR-PASSWORD]` with the role's password from step 2. Leave the host, port `5432`
+  and `/postgres` as they are. Save it as `PRODUCTION_DB_URL_READONLY` (new project) or `STAGING_DB_URL_READONLY`
+  (staging).
+- **Check:** the string has the shape
+  `postgresql://alloy_readonly.tjziptdknxdajzauctha:<password>@<pooler-host>:5432/postgres` (or the same with
+  `ikaxilmwmrmbagoidedu` for staging). The host ends in `pooler.supabase.com`, and the port is `5432`.
+- **If it doesn't work:** do not use port `6543` (the *transaction* pooler: the release tool refuses it). Do not use the
+  *Direct connection* `db.<ref>.supabase.co`: it works only over IPv6 unless the IPv4 add-on is bought.
+
+**4. Check that a write is refused.** You type no command. In your operator session, the Developer starts a hidden
+prompt, `read -rs PRODUCTION_DB_URL_READONLY`, and you paste the URL there (for staging, `STAGING_DB_URL_READONLY`). The
+Developer then shows you these two commands, and runs them when you say yes:
+
+```bash
+psql "$PRODUCTION_DB_URL_READONLY" -X -At -c "select current_user || ' read_only=' || current_setting('default_transaction_read_only')" -c "create table supabase_migrations.ro_check (i int)"
+psql "$PRODUCTION_DB_URL_READONLY" -X -At -c "set default_transaction_read_only = off" -c "create table supabase_migrations.ro_check (i int)"
+```
+
+- **Check:** the first command prints `alloy_readonly read_only=on`, then
+  `ERROR:  cannot execute CREATE TABLE in a read-only transaction`. The second prints
+  `ERROR:  permission denied for schema supabase_migrations`: even with read-only switched off, the role is not allowed
+  to write. Both fail, and nothing is created. This was rehearsed locally
+  ([RO1 evidence](environments-ro1-evidence-2026-11-27/README.md)).
+- **If it doesn't work:** if either command prints `CREATE TABLE` (with no error), stop and tell the Developer at once:
+  the role can write. If it says `password authentication failed`, the URL is wrong; check it against step 3. Right
+  after a password reset, the pooler can refuse for about 15 seconds, so wait and try once more.
 
 ### Step 5. Copy the new project's values into your secret store
 
@@ -113,11 +176,12 @@ Database Engineer.
 - the **Project URL** (it is `https://<new-ref>.supabase.co`);
 - the **`anon` key**;
 - the **`service_role` key**;
-- the `postgres` connection on port 5432, as `PRODUCTION_DB_URL`;
-- the read-only role's connection on port 5432, as `PRODUCTION_DB_URL_READONLY`.
+- the `postgres` connection, the *Session pooler* string on port 5432 with the database password, as
+  `PRODUCTION_DB_URL`: `postgresql://postgres.tjziptdknxdajzauctha:<password>@<pooler-host>:5432/postgres`;
+- the read-only role's connection, `PRODUCTION_DB_URL_READONLY`, which you built in the step before.
 
 **Check:** both connections say port 5432, and both name `<new-ref>`, not `vslwnntzzgpnmrpjipat` and not staging's
-`ikaxilmwmrmbagoidedu`. The release tool's `fp_target` refuses any other ref or port at step 9.
+`ikaxilmwmrmbagoidedu`. The release tool's `fp_target` refuses the transaction pooler port 6543 and any other ref at step 9.
 
 **If it doesn't work:** if the dashboard shows only port 6543, look for the *session* pooler, not the *transaction*
 pooler. If you cannot find it, stop and ask the Developer.
@@ -145,8 +209,8 @@ stay there; the Development Lead only needs to hear "recorded" for each row at s
 **If it doesn't work:** if a page is not where the table says, or you cannot tell the answer, write "could not read"
 and tell the Development Lead. An unread row keeps step 6b open (plan §4 (d) 3).
 
-**Staging's read-only URL.** The step-6 export also needs `STAGING_DB_URL_READONLY` in your secret store. You paste it at
-the hidden prompt when the Developer runs the export; you do not type a command.
+**Staging's read-only URL.** The step-6 export also needs `STAGING_DB_URL_READONLY`, which you made in step 5. You paste
+it at the hidden prompt when the Developer runs the export; you do not type a command.
 
 ### Before step 10. The new production secrets
 
