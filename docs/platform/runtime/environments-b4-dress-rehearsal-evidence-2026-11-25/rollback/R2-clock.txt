@@ -1,0 +1,4 @@
+credential rows after delete: 0
+a tick by hand after the delete: queued 0 -> 0, responses 1 -> 1
+after Instant Rollback (simulated) build-info: {"gitSha":"bbfbec76d7795cc3392b0c61e1c8ce829adaf9d2","gitBranch":"main","gitMessage":"b4 rehearsal","vercelEnv":"production","vercelUrl":null,"vercelDeploymentId":null,"nodeEnv":"production","supabaseProjectRef":"vslwnntzzgpnmrpjipat"}
+after the next tick: cron runs 1 -> 2, wake_count 1 -> 1, responses 1 -> 1

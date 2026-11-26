@@ -1,0 +1,168 @@
+## steps 1–3: the candidate (local refs only; nothing sent to any remote)
+branch=9725de629d7f27441e55d4cf31af6bfc216ebb0e origin/staging=8321949771f7fb6b2f04de6feb1fdd6ccb8e1484 origin/main=bbfbec76d7795cc3392b0c61e1c8ce829adaf9d2 simulated_staging=70d8dae15a942e526110257737416452b37d1940
+⏱  1 staging merge (simulated): 0s (slot before the window, budget 0s) — merge-tree exit 0; merge 70d8dae15a942e526110257737416452b37d1940
+candidate=e33220afe7112124629b60645b0532a7f4bc9b9b
+identify (no --allow-tree-diff) rc=0 tree_diff_from_staging=[]
+main fast-forwards to the candidate: yes
+⏱  2 rebuild + identify: 4s (slot before the window, budget 0s) — identify exit 0, no allowance
+candidate migrations: 558 files, head 20261223090000_w17_selftest_org_retirement.sql; added by step 1: 1 (20261223090000_w17_selftest_org_retirement.sql)
+candidate workflows with schedule: []
+DrawerSummaryStripBoundary hits: 14 (1 outside web/tests/)
+⏱  3 recount + recheck: 1s (slot before the window, budget 0s) — 558 files, head 20261223090000
+## stand-ins: the new project N (internal network only) and staging S
+new: platform schemas gotrue_rc=0 storage_rc=0 networks=[alloy-b4-int ]
+staging: platform schemas gotrue_rc=0 storage_rc=0 networks=[alloy-b4-staging-net ]
+staging stand-in: 558 files applied
+⏱  stand-ins ready (not a window step): 33s (slot -, budget 0s) — N empty with auth/storage; S at the candidate's chain
+export source: E2 seed apply rc=0 (42 PASS, 0 FAIL)
+step-6 export: items: {"sites":3,"rooms":17,"household_role_types":6,"enrollment_process":1} sha256 e6bd9d678e6aaf87d3e1e872d3fe2aeb79b7cfad5270ae4e2fe2f34a5ce9a34c
+⏱  6 export (part of step 6): 0s (slot before the window, budget 0s) — {"sites":3,"rooms":17,"household_role_types":6,"enrollment_process":1}
+## step 5: release directory and config copy
+⏱  5 config copy: 0s (slot before the window, budget 0s) — rc=0
+## step 7 (T+0:00): go/no-go observations, plan, prepare, runbook
+new project before: ledger rows 0, fingerprint columns_md5|d41d8cd98f00b204e9800998ecf8427e policies_md5|d41d8cd98f00b204e9800998ecf8427e functions_md5|d41d8cd98f00b204e9800998ecf8427e indexes_md5|d41d8cd98f00b204e9800998ecf8427e tables|0 rls_disabled|0 
+{
+  "ok": true,
+  "manifest_sha256": "f0e042c44cfc1c8bf1560871ffb3e2f537988e713b00155aa8dcf479053a593f",
+  "mode": "first_promotion",
+  "new_supabase_project_ref": "rehearsalnewprojectr",
+  "chain": 558,
+  "first_version": "20260328120000",
+  "last_version": "20261223090000",
+  "destructive_in_chain": 45
+}
+⏱  7 go/no-go, identify, staging verify, prepare: 19s (slot T+0:00–0:25, budget 1500s) — prepare exit 0, manifest f0e042c44cfc
+## step 8 (T+0:25): owner approval
+⏱  8 owner approval: 0s (slot T+0:25–0:30, budget 300s) — approve rc=0 (rehearsal environment; production approve needs the owner's terminal)
+## step 9 (T+0:30): schema apply on the new project, then the census
+fp_target: accepts the new ref, refuses the old
+chain: 558 of 558 applied in 89s
+fingerprint: new project == staging stand-in
+census orgs: 85433b1a-55c2-47de-b23f-afed42e9f61a|retired|_w17_selftest_85433b1a 
+⏱  9 schema apply + census: 90s (slot T+0:30–1:30, budget 3600s) — 558 files in 89s; check-production --stage schema exit 0
+## step 10 (T+1:30): platform settings — dashboard only; here the harness environment stands in for them
+## step 11 (T+1:45): serve the candidate on the new ref (harness), poll build-info as the runbook does
+harness (candidate on rehearsalnewprojectr): http://127.0.0.1:58099; rest 127.0.0.1:58091 auth 127.0.0.1:58092 api http://127.0.0.1:58096
+build-info: {"gitSha":"e33220afe7112124629b60645b0532a7f4bc9b9b","gitBranch":"main","gitMessage":"b4 rehearsal","vercelEnv":"production","vercelUrl":null,"vercelDeploymentId":null,"nodeEnv":"production","supabaseProjectRef":"rehearsalnewprojectr"}
+⏱  11 release (deploy simulated): 4s (slot T+1:45–2:00, budget 900s) — build-info serves the candidate on the new ref
+## steps 12–14: the clock (pg_cron + pg_net), with the relay as the production origin
+N networks: [alloy-b4-int ] (internal: true)
+scheduled-work-clock */5 * * * * active=true
+before step 12: the job's target resolves to: https://staging.workwithalloy.com/api/scheduled-work/wake
+before step 12: credential rows: 0
+before step 12: one tick by hand (the job's own command): requests queued 0 -> 0, responses 0 -> 0 (inert while the credential is absent)
+step 12 read-back: http://wake-relay:8080/api/scheduled-work/wake
+⏱  12 Vault wake URL: 0s (slot T+2:00–2:03, budget 180s) — reads back as the production-origin stand-in
+step 13: credential rows: 1
+⏱  13 Vault wake credential: 0s (slot T+2:03–2:05, budget 120s) — present
+## step 14 (T+2:05): observe a real pg_cron tick (*/5) — up to ten minutes allowed
+clock before: wake_count=0 responses=0 (UTC now 07:28:24)
+clock after: wake_count|last_wake_at = 1|2026-11-26 07:30:00.118077+00 (waited 102s)
+net._http_response (newest): 200 - {"ok":true,"workerId":"worker-fa7e2720","claimed":1,"completed":1,"retryScheduled":0,"terminallyFailed":0,"unregisteredH
+cron.job_run_details (newest): succeeded 2026-11-26 07:30:00.012764+00
+harness saw: {"at":"2026-11-26T07:30:00.141Z","method":"POST","path":"/api/scheduled-work/wake","authorization":"bearer","x_cron_token":"present","status":200}
+no staging target: every response is the production stand-in's route (non-2xx responses: 0)
+vercel-cron GET, no Authorization (CRON_SECRET unset, so Vercel sends none): HTTP 401
+vercel-cron GET, Authorization: Bearer <any> with CRON_SECRET unset: HTTP 401
+POST, x-cron-token wrong: HTTP 401
+clock unchanged by the refused calls: 1|2026-11-26 07:30:00.118077+00
+⏱  14 observe the clock: 103s (slot T+2:05–2:10, budget 600s) — real tick after 102s; wake_count 0 -> 1; Vercel-Cron-shaped calls 401
+## step 15 (T+2:10): production verification (§8, the parts with no hosted service)
+backend /build-info rc=0: {"status": 200, "body": {"ok": true, "service": "alloy-dispatcher", "git_commit": "e33220afe7112124629b60645b0532a7f4bc9b9b", "git_branch": "main"}}
+{
+  "ok": true,
+  "failures": []
+}
+| §8 check | local result |
+|---|---|
+| Vercel /api/build-info | PASS (route handler, simulated Vercel env) |
+| Render /build-info | PASS (build_info handler, simulated RENDER_GIT_*) |
+| check-production --stage final | PASS |
+| Orgs | PASS: 85433b1a-55c2-47de-b23f-afed42e9f61a|retired|_w17_selftest_85433b1a |
+| Clock | PASS: step 14 tick; CRON_SECRET absent from the harness environment |
+| Settings I-2, I-3, I-10, I-11, I-13 | not local: dashboard re-read (owner) |
+| /login renders | not local: needs the deployed app |
+| Old project unchanged | not local: nothing in this rehearsal can reach it |
+⏱  15 production verification: 1s (slot T+2:10–2:20, budget 600s) — check-production --stage final exit 0; build-info and backend build-info on the candidate
+T+2:20 decision: KEEP (every local §8 row passed)
+census, step 9 → before step 16 (must be the clock's rows only): rows:scheduled_work_occurrences|1 rows:scheduled_work_attempts|1 
+## step 16 (T+2:25): Firefly — helper, import, checks (one recorded step)
+16.1 admin auth user (dashboard action; here the Auth admin API): a2599373-3870-4575-b4fa-99892020ad21
+orgs now (1):
+  85433b1a-55c2-47de-b23f-afed42e9f61a|retired|_w17_selftest_85433b1a
+dry run: nothing was written
+16.3 created org 91b192e0-4267-4383-bbc4-906d1814125f
+summary: 27 to create, 0 to complete, 0 already present, 0 present but different (left unchanged)
+✓ wrote 27 item(s); run verify next
+PASS  config_present               27 item(s) present and equal
+PASS  work_units:lead_management   0 lane work unit(s) active
+PASS  baseline_counts              94 table(s) at their baseline
+PASS  import_write_set             business_process_drafts 0 → 1; business_process_revisions 0 → 1; configuration_publications 0 → 1; customer_p
+PASS  census_write_set             20 table(s) moved, all in the write set
+PASS  orgs                         85433b1a-55c2-47de-b23f-afed42e9f61a|retired|_w17_selftest_85433b1a; 91b192e0-4267-4383-bbc4-906d1814125f|active|Fi
+PASS  no_seed_ids                  no f17e0000-… id in any table the import writes
+PASS  memberships                  a2599373-3870-4575-b4fa-99892020ad21|admin
+PASS  auth_users                   1 user(s): a2599373-3870-4575-b4fa-99892020ad21
+✓ all 9 checks passed
+orgs after step 16: 85433b1a-55c2-47de-b23f-afed42e9f61a|retired|_w17_selftest_85433b1a 91b192e0-4267-4383-bbc4-906d1814125f|active|Firefly Early Learning 
+⏱  16 Firefly: helper + import + checks: 3s (slot T+2:25–2:50, budget 1500s) — verify exit 0 (9 PASS)
+## step 17 (T+2:50): record
+{
+  "ok": true,
+  "failures": [],
+  "entries": 568,
+  "head": "ead3d2d544fd9d82af8b330b9e55165ada4cf3eb1c551907423045736adefedd"
+}
+⏱  17 record + verify-audit: 1s (slot T+2:50–3:00, budget 600s) — verify-audit rc=0
+## §7 rollback rehearsal
+### R1 step 16 fails its checks → 16.R (production stays verified, no tenant)
+16.R with a customer row present rc=3 (expected non-zero): psql:<stdin>:105: ERROR:  rollback refused (window_closed): customers holds 1 row(s) for the org; real records exist (briefing §7)
+16.R rollback rc=0: removed org 91b192e0-4267-4383-bbc4-906d1814125f ("Firefly Early Learning") from 18 table(s) in 2 pass(es); 23 trigger(s) restored
+census equals the pre-step-16 baseline
+orgs equal step 9
+⏱  R1 16.R removal + proof: 1s (slot inside T+2:25–2:50, budget 1500s) — rc=0
+### R2 T+2:20 roll back: clock first, then code (Vercel Instant Rollback simulated), audit
+credential rows after delete: 0
+a tick by hand after the delete: queued 0 -> 0, responses 1 -> 1
+docs/platform/runtime/environments-b4-dress-rehearsal-evidence-2026-11-25/b4-dress-rehearsal.sh: line 257: 60690 Terminated: 15          ( cd "$CWT/web" && env -i PATH="$PATH" HOME="$HOME" NODE_ENV=production ALLOY_ENVIRONMENT=production VERCEL_ENV=production VERCEL_GIT_COMMIT_SHA="$1" VERCEL_GIT_COMMIT_REF="$2" VERCEL_GIT_COMMIT_MESSAGE="b4 rehearsal" NEXT_PUBLIC_SUPABASE_URL="https://$3.supabase.co" SUPABASE_URL="$API" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_KEY" INTERNAL_CRON_TOKEN="$CRON_TOKEN" ./node_modules/.bin/tsx --tsconfig tsconfig.json scripts/b4-route-harness.ts "$4" "$T/harness.port" "$EV/harness-requests.jsonl" ) >> "$T/harness.log" 2>&1
+after Instant Rollback (simulated) build-info: {"gitSha":"bbfbec76d7795cc3392b0c61e1c8ce829adaf9d2","gitBranch":"main","gitMessage":"b4 rehearsal","vercelEnv":"production","vercelUrl":null,"vercelDeploymentId":null,"nodeEnv":"production","supabaseProjectRef":"vslwnntzzgpnmrpjipat"}
+record code.rollback rc=0
+verify-audit (roll-back branch) rc=0
+⏱  R2 roll back: clock + code + record: 3s (slot T+2:20 onward, budget 0s) — credential deleted, job inert; build-info on old main/old ref
+waiting for the next real pg_cron tick to show the clock stays silent
+after the next tick: cron runs 1 -> 2, wake_count 1 -> 1, responses 1 -> 1
+⏱  R2b next tick is silent: 290s (slot -, budget 0s) — see rollback/R2-clock.txt
+### R3 step 9 fails mid-chain → hold; what can be retried
+failpath: platform schemas gotrue_rc=0 storage_rc=0 networks=[alloy-b4-failpath-net ]
+applied 40 files, then 20260414140000 with an injected error: rc=3 (psql:<stdin>:112: ERROR:  division by zero)
+ledger rows after the failure: 40 (the failing file recorded nothing); public tables 130 -> 130
+check-ledger on the partly built project rc=1 (resume refused)
+plan --first-promotion (a fixed-forward candidate) over it rc=1 (first_promotion_ledger_not_empty: the target records 40 version(s) (head 20260414100000); first-promotion mode runs only against a new proje)
+⏱  R3 step-9 failure path: 16s (slot T+0:30–1:30, budget 0s) — partial project cannot be resumed or re-planned: recreate it
+## timings
+step                                           window_slot        budget_s  measured_s  result
+1 staging merge (simulated)                    before the window  0         0           merge-tree exit 0; merge 70d8dae15a942e526110257737416452b37d1940
+2 rebuild + identify                           before the window  0         4           identify exit 0, no allowance
+3 recount + recheck                            before the window  0         1           558 files, head 20261223090000
+stand-ins ready (not a window step)            -                  0         33          N empty with auth/storage; S at the candidate's chain
+6 export (part of step 6)                      before the window  0         0           {"sites":3,"rooms":17,"household_role_types":6,"enrollment_process":1}
+5 config copy                                  before the window  0         0           rc=0
+7 go/no-go, identify, staging verify, prepare  T+0:00–0:25         1500      19          prepare exit 0, manifest f0e042c44cfc
+8 owner approval                               T+0:25–0:30         300       0           approve rc=0 (rehearsal environment; production approve needs the owner's terminal)
+9 schema apply + census                        T+0:30–1:30         3600      90          558 files in 89s; check-production --stage schema exit 0
+10 platform settings                           T+1:30–1:45         900       -           not simulated: Supabase/Vercel/Render dashboards (owner)
+11 release (deploy simulated)                  T+1:45–2:00         900       4           build-info serves the candidate on the new ref
+12 Vault wake URL                              T+2:00–2:03         180       0           reads back as the production-origin stand-in
+13 Vault wake credential                       T+2:03–2:05         120       0           present
+14 observe the clock                           T+2:05–2:10         600       103         real tick after 102s; wake_count 0 -> 1; Vercel-Cron-shaped calls 401
+15 production verification                     T+2:10–2:20         600       1           check-production --stage final exit 0; build-info and backend build-info on the candidate
+16 Firefly: helper + import + checks           T+2:25–2:50         1500      3           verify exit 0 (9 PASS)
+17 record + verify-audit                       T+2:50–3:00         600       1           verify-audit rc=0
+R1 16.R removal + proof                        inside T+2:25–2:50  1500      1           rc=0
+R2 roll back: clock + code + record            T+2:20 onward      0         3           credential deleted, job inert; build-info on old main/old ref
+R2b next tick is silent                        -                  0         290         see rollback/R2-clock.txt
+R3 step-9 failure path                         T+0:30–1:30         0         16          partial project cannot be resumed or re-planned: recreate it
+docs/platform/runtime/environments-b4-dress-rehearsal-evidence-2026-11-25/b4-dress-rehearsal.sh: line 51: 60684 Terminated: 15          node "$REPO/docs/platform/runtime/environments-b3-tenant-evidence-2026-11-25/api-proxy.mjs" "$RESTP" "$AUTHP" "$T/proxy.port"
+docs/platform/runtime/environments-b4-dress-rehearsal-evidence-2026-11-25/b4-dress-rehearsal.sh: line 51: 65382 Terminated: 15          ( cd "$CWT/web" && env -i PATH="$PATH" HOME="$HOME" NODE_ENV=production ALLOY_ENVIRONMENT=production VERCEL_ENV=production VERCEL_GIT_COMMIT_SHA="$1" VERCEL_GIT_COMMIT_REF="$2" VERCEL_GIT_COMMIT_MESSAGE="b4 rehearsal" NEXT_PUBLIC_SUPABASE_URL="https://$3.supabase.co" SUPABASE_URL="$API" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_KEY" INTERNAL_CRON_TOKEN="$CRON_TOKEN" ./node_modules/.bin/tsx --tsconfig tsconfig.json scripts/b4-route-harness.ts "$4" "$T/harness.port" "$EV/harness-requests.jsonl" ) >> "$T/harness.log" 2>&1
+teardown: containers=[] networks=[] scratch_db=[] scratch_worktree=[0]
+SCRIPT_EXIT=0
