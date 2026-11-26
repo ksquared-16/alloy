@@ -14,13 +14,39 @@ the new project `tjziptdknxdajzauctha` (`PRODUCTION_DB_URL_READONLY`) and stagin
 (`STAGING_DB_URL_READONLY`). The owner's steps are in the
 [owner guide](../environments-owner-dashboard-guide-2026-11-26.md), step 5.
 
-**Proven only locally.** The tests ran on throwaway Supabase Postgres containers (`supabase/postgres:17.6.1.165`, the
-image recorded for staging and the old production, PostgreSQL 17.6), with GoTrue's and Storage's own schemas, on an
-internal Docker network with no egress. No hosted project, credential or supabase CLI was used. The exact image of the
-new project was not observed: the script's own check table (below) is the proof on each hosted project.
+**Proven only locally.** The tests ran on the one shared local stack, `alloy-cert`
+([local Docker containment](../../governance/local-docker-containment.md)). The harness joins it with `alloy-stack use`,
+starts no container of its own, and releases its lease at the end. The stack's database is `supabase/postgres:17.6.1.165`
+(PostgreSQL 17.6, the image recorded for staging and the old production): major 17, the same as the hosted projects
+(`run.txt`, line 6). No hosted project, credential or supabase CLI was used. The exact image of the new project was not
+observed: the script's own check table (below) is the proof on each hosted project.
 
-Re-run: `bash ro1-readonly-role-check.sh <this-folder>` (about 5 minutes; Docker and the images above; teardown removes
-every container and the network). Transcript: [`run.txt`](run.txt).
+Each case is a throwaway database inside that stack, `ro1_case_a_<pid>` and `ro1_case_b_<pid>`, created by `postgres`.
+It gets the platform a hosted project's database has before any Alloy migration, in three steps:
+[`platform/1-before-gotrue-storage.sql`](platform/1-before-gotrue-storage.sql); GoTrue's and Storage's own migrations,
+run by the stack's own auth and storage containers against that database; then
+[`platform/2-after-gotrue-storage.sql`](platform/2-after-gotrue-storage.sql). None of it is cluster-wide.
+
+- **pg_cron is a stand-in.** pg_cron can only be created in the database named by `cron.database_name`, which is
+  `postgres` on the stack. So [`platform/3-pg_cron-stand-in.sql`](platform/3-pg_cron-stand-in.sql) provides `cron.job`,
+  `cron.schedule` and `cron.unschedule`, and `20261002120000_scheduled_work_clock_pg_cron.sql` is applied with its one
+  `create extension if not exists pg_cron;` line made a no-op. Every other file is applied as committed. As a result,
+  the census reads `extension:pg_cron|missing` in both cases. The fingerprint is byte-for-byte the same as the earlier
+  run, which used its own containers (`ac485ca01f55`).
+- **The role runs under a test name.** Roles are cluster-wide, so the role script runs as `ro1_readonly_<pid>`. The
+  harness swaps that name for `alloy_readonly` in a copy of the committed script, and checks that reversing the swap
+  gives the committed file byte for byte. The committed script still creates `alloy_readonly`. In the case folders, the
+  `*.alloy_readonly.txt` files are that role's output.
+- **Case B starts clean.** Case A's database and role are dropped before case B, so case B's first run creates the role.
+- **Teardown, also on failure.** In each case database the harness runs `drop owned by` for the test roles (their grants
+  and default-privilege entries). It then drops the databases and the roles. It shows with `\du` and `\ddp` that none
+  remains, and that the cluster's roles, memberships and role settings are unchanged (`run.txt`, the teardown proof).
+  If the stack was already up when the harness joined, it releases its lease with `--keep-running`. The stack is not
+  the harness's to stop.
+
+Re-run, from the worktree root: `bash docs/platform/runtime/environments-ro1-evidence-2026-11-27/ro1-readonly-role-check.sh
+docs/platform/runtime/environments-ro1-evidence-2026-11-27` (about 1 minute on a running stack, plus the stack's start
+if it is down). Transcript: [`run.txt`](run.txt).
 
 ## 1. What read-only access needs
 
@@ -92,7 +118,7 @@ A local org row (`93667019-…`, one site) stands in for Firefly's.
   DELETE and TRUNCATE on `orgs` and `locations`, `BEGIN READ WRITE`, a DELETE on the ledger, and an UPDATE on
   `storage.buckets`. Public has no sequence on this chain, so `nextval` is skipped.
 - DDL with read-only off: CREATE TABLE and CREATE FUNCTION in public get `permission denied for schema public`. CREATE
-  SCHEMA gets `permission denied for database postgres`. ALTER TABLE, DROP TABLE and CREATE INDEX get
+  SCHEMA gets `permission denied for database …` (the case database; on a hosted project, `postgres`). ALTER TABLE, DROP TABLE and CREATE INDEX get
   `must be owner of table …`.
 - The owner's step-5 check (guide, step 5, item 4), exactly: `create table supabase_migrations.ro_check` is refused by
   the read-only transaction, and with read-only off by `permission denied for schema supabase_migrations`.
@@ -111,8 +137,9 @@ refused.** A session that **deliberately** turns read-only off can do the follow
 case 5 of 5 succeeded):
 
 1. `lo_create(0)`: it creates a large object.
-2. `net.http_get(...)`: it queues an outbound HTTP request through pg_net. Here the network has no egress; on a hosted
-   project, the request would leave.
+2. `net.http_get(...)`: it queues an outbound HTTP request through pg_net. Here nothing is sent: pg_net's worker serves
+   only the stack's `postgres` database, and both requests are still queued when the case ends (`still queued: 2`). On a
+   hosted project, the request would leave.
 3. INSERT into `net.http_request_queue` and `net._http_response` (PUBLIC has all privileges on them).
 4. A temporary table. It lasts only for that session; none was left afterwards.
 5. `ALTER ROLE alloy_readonly SET default_transaction_read_only = off`. Postgres lets every role change its own defaults.
@@ -148,7 +175,8 @@ the transaction pooler (6543) is refused.
 
 ## Files
 
-- `ro1-readonly-role-check.sh`: the harness. `run.txt`: its transcript.
+- `ro1-readonly-role-check.sh`: the harness. `run.txt`: its transcript, with the teardown proof.
+- `platform/`: a case database's platform, before any Alloy migration, and the pg_cron stand-in.
 - `queries/`: the exact SQL of each read, with `SHA256SUMS`.
 - `case-a/`, `case-b/`: the role script's output, the chain log, each read as `postgres` and as `alloy_readonly`, the
   no-BYPASSRLS control, `refusals.txt` and `public-reach.txt`.

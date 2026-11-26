@@ -8,8 +8,8 @@ ALTER ROLE
 GRANT
 GRANT
 ALTER DEFAULT PRIVILEGES
-psql:<stdin>:68: NOTICE:  schema "supabase_migrations" already exists, skipping
 CREATE SCHEMA
+psql:<stdin>:68: NOTICE:  schema "supabase_migrations" already exists, skipping
 GRANT
 GRANT
 ALTER DEFAULT PRIVILEGES

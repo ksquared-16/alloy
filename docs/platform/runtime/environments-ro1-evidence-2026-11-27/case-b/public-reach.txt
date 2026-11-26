@@ -1,7 +1,7 @@
-# alloy_readonly with read-only deliberately turned off: what PUBLIC (Supabase's grants to every role) still reaches
+# ro1_readonly_67076 (the role script's role, test name) with read-only deliberately turned off: what PUBLIC (Supabase's grants to every role) still reaches
 ## lo_create
 SET
-large object 31251
+large object 1116434
 ## net.http_get
 SET
 queued request 1
@@ -9,6 +9,8 @@ queued request 1
 SET
 row 2
 INSERT 0 1
+## the queued requests, as postgres (pg_net's worker serves only the database postgres, so none is sent from here)
+still queued: 2
 ## temp table
 SET
 CREATE TABLE
