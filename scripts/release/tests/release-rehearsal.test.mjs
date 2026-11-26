@@ -92,7 +92,7 @@ test("staging verification: a red required check blocks before any manifest exis
     });
     assert.equal(r.prep.ok, false);
     assert.equal(r.prep.step, "staging.verify");
-    assert.match(r.prep.failures.join(" "), /CI: required check trust-db-certification is completed\/failure/);
+    assert.match(r.prep.failures.join(" "), /CI: required check Trust DB certification is completed\/failure/);
     assert.equal(r.result, null, "nothing to approve, nothing executed");
     unchanged(r);
 });

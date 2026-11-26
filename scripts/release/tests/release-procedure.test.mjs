@@ -64,6 +64,20 @@ test("procedure order: approval precedes every production step; contract follows
     assert.ok(ids.indexOf("production.snapshot") < ids.indexOf("schema.expand"));
 });
 
+// GitHub names a check-run after the job's `name:`, not the workflow file. checkStaging matches on that name, so a
+// required check that names a file (as `web-typecheck` once did) can never pass (B4 finding F6).
+test("required checks: each names a job that a pull_request to main runs", () => {
+    const WF = join(HERE, "..", "..", "..", ".github", "workflows");
+    const jobNames = new Set();
+    for (const f of execFileSync("ls", [WF], { encoding: "utf8" }).split("\n").filter((n) => n.endsWith(".yml"))) {
+        const y = readFileSync(join(WF, f), "utf8");
+        const on = y.split(/^on:\s*$/m)[1]?.split(/^\S/m)[0] ?? "";
+        if (!/^ {2}pull_request:/m.test(on) || /^ {2}pull_request:\s*\n {4}branches:/m.test(on)) continue;
+        for (const m of (y.split(/^jobs:\s*$/m)[1] ?? "").matchAll(/^ {4}name:\s*(.+?)\s*$/gm)) jobNames.add(m[1].replace(/^["']|["']$/g, ""));
+    }
+    for (const name of config.required_checks) assert.ok(jobNames.has(name), `${name} is not the name of a pull_request job`);
+});
+
 test("canonical JSON is key-order independent", () => {
     assert.equal(canonicalJson({ b: 1, a: [2, { d: 3, c: 4 }] }), canonicalJson({ a: [2, { c: 4, d: 3 }], b: 1 }));
     assert.notEqual(hashRecord({ a: 1 }), hashRecord({ a: 2 }));

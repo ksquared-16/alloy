@@ -17,11 +17,12 @@
     }
   },
   "required_checks": [
-    "trust-db-certification",
-    "trust-adoption-certification",
-    "enrollment-configuration-certification",
-    "web-prebuild-gates",
-    "web-typecheck"
+    "Trust DB certification",
+    "Trust Adoption certification",
+    "Enrollment configuration certification",
+    "Prebuild gates (route capabilities)",
+    "Production graph",
+    "Full graph (tests + scripts)"
   ],
   "tenancy": {
     "staging_school": { "id": "93667019-bd28-49b5-a688-acc9bb1e0a19", "name": "Firefly" },
