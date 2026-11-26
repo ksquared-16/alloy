@@ -399,6 +399,9 @@ document lists it. At cutover, in the order the code needs:
 4. §C.2 before the first invite or password reset goes out.
 5. Every **S** and **X** row checked **absent** on the production scopes.
 
+The ordered runbook for the first promotion, with each issue above labelled and the owner's decisions D1–D8 applied, is the
+[first-promotion briefing](environments-p1s-first-promotion-briefing-2026-11-25.md).
+
 ## Not a setting (scanner candidates excluded)
 
 <!-- settings:excluded -->

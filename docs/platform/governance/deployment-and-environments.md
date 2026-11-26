@@ -283,6 +283,7 @@ Its QA profile — the three managed QA identities, required runtime settings an
 
 - [`production-release-procedure.md`](production-release-procedure.md) — the routine staging-to-production release (proposed)
 - [`environments-p1s-settings-checklist-2026-11-25.md`](../runtime/environments-p1s-settings-checklist-2026-11-25.md) — every Vercel, Render and Supabase setting the code reads, by name and source (proposed)
+- [`environments-p1s-first-promotion-briefing-2026-11-25.md`](../runtime/environments-p1s-first-promotion-briefing-2026-11-25.md) — the owner's ordered runbook for the first promotion to a new production Supabase project (proposed)
 - `api-contracts.md`
 - `docs/audits/supabase-schema-alignment-audit.md`
 - Root `README.md` for clone/setup

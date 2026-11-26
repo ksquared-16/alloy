@@ -1,0 +1,11 @@
+# P1S first-promotion briefing — offline evidence (2026-11-25)
+
+Git objects only. No fetch, no network, no credential, no hosted service.
+
+| File | Command |
+|---|---|
+| `staging-integration-check.txt` | `git merge-tree` and ancestry checks of this branch against `origin/staging` as last fetched (2026-11-25 10:14 local) |
+| `plan-empty-ledger-p4-candidate.json` | `node scripts/release/alloy-release.mjs plan --staging origin/staging --main origin/main --candidate refs/candidates/aly-14-p4-staging-to-main --allow-tree-diff .github/workflows/vacilando-tier2.yml --production-ledger <empty file>` (exit 1) |
+
+The plan was run against P4's candidate, which D1 replaces. It shows how the P6 planner treats a brand-new project's empty ledger, not the
+final migration list.
