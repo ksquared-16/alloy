@@ -3,7 +3,7 @@ owner: runtime
 status: proposed
 last_reviewed: 2026-11-26
 supersedes: [docs/platform/runtime/environments-b4-final-cutover-plan-2026-11-25.md]
-status_note: Final cutover plan for objective WALDEN_ENVIRONMENTS_AND_PROMOTION_B9E42B66 (slice B4), for the owner's approval at briefing step 6b. It orders the first-promotion briefing into one timed list, writes in the owner's 2026-11-25 decisions (PITR, Firefly's admin, the window date, the step-16 operator, no lanes carried, rooms at the export review), and records the second local dress rehearsal. The window is Tue Dec 1, 09:00–12:00 PT, if the owner approves this plan by Sun Nov 29; otherwise Tue Dec 8, 09:00–12:00 PT, with the same setup. Nothing here authorizes a live action.
+status_note: Final cutover plan for objective WALDEN_ENVIRONMENTS_AND_PROMOTION_B9E42B66 (slice B4), for the owner's approval at briefing step 6b. It orders the first-promotion briefing into one timed list, writes in the owner's 2026-11-25 decisions (PITR, Firefly's admin, the window date, the step-16 operator, no lanes carried, rooms at the export review), and records the second local dress rehearsal. The window is Tue Dec 1, 09:00–12:00 PT, if the owner approves this plan by Sun Nov 29; otherwise Tue Dec 8, 09:00–12:00 PT, with the same setup. Revised 2026-11-26 with the owner's new D11 and D12: Claude Code runs the step-16 commands in the owner's operator session, each approved by the owner before it runs; the owner pastes production secrets at a hidden prompt and does every dashboard step from the owner guide. Nothing here authorizes a live action.
 ---
 
 # Environments and promotion — final cutover plan (2026-11-26)
@@ -18,8 +18,11 @@ pass condition and any go/no-go or rollback point. It replaces the
 [2026-11-25 plan](environments-b4-final-cutover-plan-2026-11-25.md). The structure is the same. What changed: the owner's
 decisions are now written in (§0), a CI blocker was found and fixed (F6, §5), the step-16 rollback is followed by a
 re-run (R1b), and a fresh dress rehearsal was run on the fixed branch (§1). The commands are the briefing's §4.1 and §5.6.1,
-plus the runbook that `release runbook` prints. Briefing decisions D1–D11 still stand, except that the owner has now fixed
-D8's date (§0). D12, who types the operator commands, is new in this plan (§0).
+plus the runbook that `release runbook` prints. Briefing decisions D1–D10 still stand, except that the owner has now fixed
+D8's date (§0). D11 stands as the briefing wrote it, and the owner's 2026-11-26 decisions add to it how each step-16
+command is approved and how secrets are entered (§0). D12, who runs the operator commands, is new in this plan and was
+decided on 2026-11-26 (§0). Every dashboard step the owner does is in the
+[owner dashboard guide](environments-owner-dashboard-guide-2026-11-26.md), in plan-step order.
 
 **Status: proven only locally.** Each row says whether the dress rehearsal ran it (**L**), or whether it needs a hosted
 service, a dashboard or a person and so could not be rehearsed locally (**—**). Nothing has touched staging, production,
@@ -28,30 +31,49 @@ hosted Supabase, Vercel, Render or a GitHub remote. Evidence:
 The script is
 [`environments-b4-dress-rehearsal-evidence-2026-11-25/b4-dress-rehearsal.sh`](environments-b4-dress-rehearsal-evidence-2026-11-25/b4-dress-rehearsal.sh).
 
-## 0. Owner decisions written into this plan (2026-11-25)
+## 0. Owner decisions written into this plan (2026-11-25; D11 and D12 revised 2026-11-26)
 
 | # | Decision | Where it lands |
 |---|---|---|
 | **O-PITR** | **Decided.** The new project uses **point-in-time recovery with 7 days of retention** (a paid add-on), enabled on the new project **before the window** | Step 5 (owner, Supabase dashboard). Pass: PITR is enabled with 7-day retention, and the project shows a restore point before T. This closes M7's backup half. It is not an open choice |
 | **O-ADMIN** | **Decided (Q1).** **Firefly's first admin is the owner's own existing Auth account.** The owner invites Firefly's staff afterwards, from the app | Step 16.1: the owner adds that account in the new project's Authentication → Users. `<admin-user-id>`, `<admin-email>` and `<admin-full-name>` are the owner's own. They are typed in the session and not written in any repository file. Nobody else is named as first admin |
 | **O-WHEN** | Window **Tue Dec 1 2026, 09:00–12:00 PT**, if the owner approves this plan (step 6b) **by the end of Sun Nov 29**. Otherwise **Tue Dec 8 2026, 09:00–12:00 PT** | T = 09:00 PT on the window day (17:00 UTC; `pg_cron` runs in UTC). §2.1 gives the deadline for each step before the window |
-| **D12** | **A named human operator, `<operator-name>`** (to be named by the owner), runs the step-16 commands and any other operator-run command, while the owner watches. The session transcript is recorded | Step 16 (16.0, 16.2–16.6) and 16.R. That person types the §5.6.1 commands in the Mac mini operator session. Steps the Developer runs through the release tool stay with the Developer. The transcript is filed in `$DIR` at step 17 |
+| **D11** | **Decided (briefing D11; approval and secret rules added 2026-11-26).** Step 16 stays one recorded step in the Mac mini operator session with the owner present: the existing helper, then the reviewed import, then the checks. **The owner never types commands.** **Per-command approval:** the owner approves each step-16 command before it runs. **Secret entry:** the owner pastes each production secret at a hidden prompt (`read -rs`). The Database Engineer's review of the export and the step-16 command list stays on (step 6) | Step 16 and 16.R, under the two rules below this table. Step 6: the Development Lead's and the Database Engineer's approvals are both recorded |
+| **D12** | **Decided (2026-11-26). The operator is Claude Code**, running in the owner's own operator session on the Mac mini. It runs the pre-reviewed §5.6.1 commands for the Firefly step, and nothing else. The owner is present and approves each command before it runs; the session transcript is recorded. The owner does **every Vercel, Render and Supabase dashboard step personally**, following the [owner dashboard guide](environments-owner-dashboard-guide-2026-11-26.md) | Step 16 (16.0, 16.2–16.6) and 16.R. Steps the Developer runs through the release tool stay with the Developer. The dashboard steps (5, 6's C-row reads, 10, 11's Render deploy, 12, 13, 15's re-read, 16.1 and the R-C rollback) are the owner's. The transcript is filed in `$DIR` at step 17 |
 | **O-LANES** | **No work lanes are carried.** Lanes are set up in the **Work Unit Queue** screen right after step 16 | The reviewed export must name no lane work units (16.4 then plans no `blocked` items). New step **16L**: the owner, signed in as Firefly's admin, sets up the lanes in the app |
 | **O-ROOMS** | Which rooms Firefly gets (the 17 rooms added after the 2026-09-19 capture, which may be test rooms) is **decided by the owner at the step-6 export review** | Step 6: keep/drop rooms one by one, then the export is re-hashed. `<export-sha256>` is the hash after the owner's edits |
+
+**The per-command approval rule (D11, D12).** In step 16 and 16.R, before each command, the operator shows the owner the
+exact command from the reviewed §5.6.1 list, with only its placeholders filled in, and says what it will do. It runs the
+command only after the owner says yes to **that** command. One yes covers one command, once. A re-run, a changed
+argument, or a different command each needs its own yes. A command that is not on the reviewed list is not run in the
+window: the operator stops and the owner decides (§3 R-D). The typed confirmations that 16.3 (the slug) and 16.5 (the
+org id's first 8 characters) ask for are part of the command the owner approved. After each command the operator shows
+its output and whether it met the §5.6.1 expectation before asking for the next yes. A "no", or no answer, is a stop.
+
+**The secret-entry rule (D11).** Wherever a command needs a production secret (the new project's service-role key at
+16.0, `$PRODUCTION_DB_URL`, `$PRODUCTION_DB_URL_READONLY`), the operator starts a hidden prompt, `read -rs <NAME>`, and
+the owner pastes the value there. The value is never written to a file, never typed or pasted into a command line, and
+never shown to Claude: commands name only the variable (`"$PRODUCTION_DB_URL"`), and the operator never prints or
+inspects it (no `echo`, `env`, `printenv`, `set` or `declare -p`). A value pasted anywhere else, or shown on screen or in
+the transcript, is a stop, and the owner decides how to go on. This rule covers every step in the session that needs a
+production secret (steps 7, 9, 15, 15b, 16 and 16.R), not only step 16.
 
 **Who acts.**
 
 - **Owner**: holds every production credential and is present with Vercel, Render and Supabase for the whole window.
-  In the window, the owner types only credentials (`read -rs`, never echoed) and the step-8 approval, works in the
-  dashboards, and does step 16.1 and step 16L in the app.
+  The owner never types commands in the operator session. In the window, the owner pastes credentials at hidden
+  prompts (`read -rs`, never echoed), gives the step-8 approval at the owner's own terminal, approves each step-16
+  command, does every dashboard step from the [owner dashboard guide](environments-owner-dashboard-guide-2026-11-26.md),
+  and does step 16.1 and step 16L.
 - **Developer (release tool)**: Claude Code, working through the release tool in the Mac mini operator session with the
   transcript recording on. It runs steps 2, 3, 5's config copy, 6's export, 7, 9, 11, 14, 15, 15b and 17 exactly as
   approved. Nothing is improvised in the window.
-- **Operator, `<operator-name>`** (D12, to be named by the owner): a named human, not the Developer. Types step 16's
-  commands (16.0, 16.2–16.6, and 16.R if needed) and any other operator-run command in the same session, while the
-  owner watches. The transcript records every command.
-- **Development Lead** and **Database Engineer**: review the export and the step-16 command list at step 6. The
-  Development Lead also confirms at 6b that every prerequisite is closed.
+- **Operator: Claude Code** (D12), in the owner's own operator session on the Mac mini. Runs step 16's pre-reviewed
+  commands (16.0, 16.2–16.6, and 16.R if needed), each only after the owner approves it, under the two rules above. It
+  runs nothing outside the reviewed §5.6.1 list. The transcript records every command and every approval.
+- **Development Lead** and **Database Engineer**: review the export and the step-16 command list at step 6 (the
+  Database Engineer's review stays on, D11). The Development Lead also confirms at 6b that every prerequisite is closed.
 
 **Shell names** (as in briefing §4.1): `REL="node scripts/release/alloy-release.mjs"`, `SHA` = the step-2 candidate,
 `NEW` = the new project's ref, `DIR=releases/<date>-${SHA:0:12}`, `C="--config $DIR/release-config.json"`,
@@ -143,8 +165,8 @@ The Dec 8 window has the same setup, hours and T+ offsets. An earlier window wou
 | **3** | Fri Nov 27 | Developer | `migration-counts.sh origin/staging origin/main "$SHA"`; `git grep -E '^\s*schedule:' "$SHA" -- .github/workflows/`; `git grep DrawerSummaryStripBoundary "$SHA" -- web` | 558 files, head `20261223090000`. No `schedule:`. No reader outside `web/tests/` except `featureFlag.ts`<br>**Done 2026-11-26 (C1):** staging and `$SHA` each have 558 files, 558 distinct versions, head `20261223090000`; main 229 files; `differing_paths=0`. The `schedule:` grep finds nothing. `DrawerSummaryStripBoundary` is read only in `web/lib/layout/featureFlag.ts` and `web/tests/layout/drawerSummaryStripBoundaryFlag.test.ts` | L |
 | **4** | Sat Nov 28 | Owner authorizes; Developer pushes | Push `$SHA` to a non-deploying branch (Vercel's ignored-build step skips every branch except `staging` and `main`). Open its PR to `main` marked *do not merge*. Save `gh api repos/ksquared-16/alloy/commits/$SHA/check-runs` as `$DIR/check-runs.json` | Each of the six `required_checks` (`Trust DB certification`, `Trust Adoption certification`, `Enrollment configuration certification`, `Prebuild gates (route capabilities)`, `Production graph`, `Full graph (tests + scripts)`) has a `completed`/`success` run on `$SHA` (M6). A name missing from the real check-runs is a stop: fix the config through step 1<br>**Prepared 2026-11-26 (C1), not pushed:** `objective/environments-and-promotion` fast-forwarded from `afda81b77` to `$SHA`; `git merge-base --is-ancestor origin/main $SHA` holds. Its PR to `main` is the *do not merge* CI PR. Push, PR and `check-runs.json` wait for the owner. This record is committed on top of `$SHA` on the local branch `objective/environments-and-promotion-c1-record`, so the PR head stays `$SHA`. `test:settings-checklist` failed on `$SHA` for `web:AUDIT_EVENT_MISMATCH`, an error code from PR #1647; the record commit lists it as not a setting. No workflow runs that test, so it does not block step 4 | — (names checked against the workflow files by a test, F6) |
 | **5** | Sat Nov 28 | Owner (Supabase); Developer | Owner: create the new project in `us-west-2` and record its ref; create the read-only role; **enable PITR with 7-day retention** (O-PITR). Developer: `$REL first-promotion-config --new-ref "$NEW" --out "$DIR/release-config.json"` | Ref, role, PITR and `$DIR` are recorded. The config copy names the new ref, with `previous_supabase_project_ref` `vslwnntzzgpnmrpjipat`. **The old project is not touched** | L (config copy) |
-| **6** | Sun Nov 29 | Owner; Developer; Development Lead; Database Engineer | Owner: the C-row dashboard reads into the owner's secret store (§4 a.3). Developer: the export from staging, read-only (briefing §5.6.1, *Step 6*); the owner types the staging read-only URL. Reviewers: the export line by line, and the step-16 command list. Owner: **keep or drop each of the 17 later rooms** (O-ROOMS). Firefly's first admin is already decided: the owner's own existing Auth account (O-ADMIN); the owner invites Firefly's staff after the window | The briefing's §6 rows are all marked. The file names **no lane work units** (O-LANES). The owner's room answers are applied and the file re-hashed: `<export-sha256>`. Both reviewers' approval is recorded | L (export from the seed) |
-| **6b** | **end of Sun Nov 29** | Development Lead; Owner | The Development Lead confirms every §4 item closed, with evidence. The owner approves **this plan**, filled in with `$SHA`, `$NEW`, `<export-sha256>` and `<operator-name>`. The approval selects the window: Dec 1 or Dec 8 | Approval recorded in `$DIR` | — |
+| **6** | Sun Nov 29 | Owner; Developer; Development Lead; Database Engineer | Owner: the C-row dashboard reads into the owner's secret store (§4 a.3). Developer: the export from staging, read-only (briefing §5.6.1, *Step 6*); the owner pastes the staging read-only URL at the hidden prompt. Reviewers: the export line by line, and the step-16 command list. Owner: **keep or drop each of the 17 later rooms** (O-ROOMS). Firefly's first admin is already decided: the owner's own existing Auth account (O-ADMIN); the owner invites Firefly's staff after the window | The briefing's §6 rows are all marked. The file names **no lane work units** (O-LANES). The owner's room answers are applied and the file re-hashed: `<export-sha256>`. Both reviewers' approval is recorded | L (export from the seed) |
+| **6b** | **end of Sun Nov 29** | Development Lead; Owner | The Development Lead confirms every §4 item closed, with evidence. The owner approves **this plan**, filled in with `$SHA`, `$NEW` and `<export-sha256>`. The approval selects the window: Dec 1 or Dec 8 | Approval recorded in `$DIR` | — |
 | **Nov 29** | **GO/NO-GO 0** (end of Sun Nov 29) | Owner | Read whether 6b is recorded | **Go:** 6b approved by the end of Sun Nov 29, so T = **Tue Dec 1, 09:00 PT**. **No-go:** T = **Tue Dec 8, 09:00 PT**, with the same setup; steps 2–4 are redone in the week of Dec 7, and 6b is still needed before Dec 8 | — |
 
 ### 2.2 The window (T = 09:00 PT on the window day)
@@ -154,7 +176,7 @@ The Dec 8 window has the same setup, hours and T+ offsets. An earlier window wou
 | 0:00 | **7** | Developer; Owner | `git fetch origin`; `$REL identify --candidate "$SHA"`; staging build-info, check-runs, staging ledger, fingerprint and orgs; production build-info, the new project's ledger (`ledger-if-present`) and fingerprint; `plan --first-promotion`; `prepare --first-promotion $C …`; `runbook $M $C > $DIR/runbook.md` (briefing §4.1, *Step 7*). Owner re-reads C-RB-1 and C-RB-2 | Every §4 item closed. `identify` exit 0 with no allowance. Staging serves the head `$SHA` was built from, on `ikaxilmwmrmbagoidedu`. Production serves old `main` on `vslwnntzzgpnmrpjipat`. The new project reads `tables\|0` with an empty ledger. `prepare` exit 0 with `mode: first_promotion` and chain 558 | L |
 | 0:25 | **GO/NO-GO 1** | Owner | Read `$DIR/runbook.md` | Any step-7 failure is a **no-go**. Nothing has been touched yet. Cancel: if T was Dec 1, the window moves to Dec 8 | — |
 | 0:25 | **8** | Owner | `$REL approve $M $C --approver Kelly --confirm <12> --ttl-hours 4` at the **owner's own terminal** (it is refused from an agent session). Then the Developer runs `$REL record $C $A --step owner.approval --status pass --detail '{}'` | The approval is in the chain and covers the window. Its scopes include `snapshot`, `schema_contract` and `code_rollback` | L (rehearsal environment) |
-| 0:30 | **9** | Developer; Owner types `$PRODUCTION_DB_URL` | Runbook sections 5–6, in order: `fp_target "$PRODUCTION_DB_URL"`; `pg_dump -Fc` of the empty project and `record production.snapshot`; `check-ledger`; `emit-sql ledger-table`; then, for each version in `apply-order`, `emit-apply … \| psql "$PRODUCTION_DB_URL" --single-transaction …` with the `ON_ERROR_STOP` variable on, followed by `record schema.expand --status applied`, stopping at the first failure. Then the census, `check-production --stage schema … --census`, and `record schema.expand --status pass` | `fp_target` accepts only the new ref on port 5432. 558/558 applied. `check-production --stage schema` exit 0: the ledger is the candidate's versions; the fingerprint equals **hosted staging's** from step 7; `rls_disabled` is 0; the only org is `_w17_selftest_<hex>`, `retired`; six extensions; bucket `org_documents` | L (local; hosted latency not measured) |
+| 0:30 | **9** | Developer; Owner pastes `$PRODUCTION_DB_URL` at the hidden prompt | Runbook sections 5–6, in order: `fp_target "$PRODUCTION_DB_URL"`; `pg_dump -Fc` of the empty project and `record production.snapshot`; `check-ledger`; `emit-sql ledger-table`; then, for each version in `apply-order`, `emit-apply … \| psql "$PRODUCTION_DB_URL" --single-transaction …` with the `ON_ERROR_STOP` variable on, followed by `record schema.expand --status applied`, stopping at the first failure. Then the census, `check-production --stage schema … --census`, and `record schema.expand --status pass` | `fp_target` accepts only the new ref on port 5432. 558/558 applied. `check-production --stage schema` exit 0: the ledger is the candidate's versions; the fingerprint equals **hosted staging's** from step 7; `rls_disabled` is 0; the only org is `_w17_selftest_<hex>`, `retired`; six extensions; bucket `org_documents` | L (local; hosted latency not measured) |
 | 1:30 | **HOLD point** | Owner | — | If step 9 has not passed by T+1:30, or any file failed: **hold** (§3 R-B). Production still serves the old build on the old project | L (R3) |
 | 1:30 | **10** | Owner (dashboards) | Supabase §5.1: exposed schemas, Auth provider, Site URL, redirects, pooling, SMTP. Vercel Production scope §5.2: R rows on the new project, `CRON_SECRET` **unset**, F rows at staging's values, both drawer-strip keys, S and X rows absent, L rows unset, Vercel Cron Jobs disabled if the dashboard allows. Render §5.3, saved **without deploying**. If C-REN-2 says a save redeploys, Render's values move to just before step 11's Render deploy | Every §5.1–§5.3 row is set and re-read. `NEXT_PUBLIC_*` are in place before step 11's build | — |
 | 1:45 (start as soon as 10 passes) | **11** | Developer; Owner (Render) | Runbook section 7: check that `git ls-remote origin main` equals step 2's base; `git push origin "$SHA":refs/heads/main` (fast-forward, never `--force`); poll `https://www.workwithalloy.com/api/build-info` until it serves `$SHA` on `$NEW`; `record code.deploy`. Then the owner deploys Render on `$SHA` | Build-info shows `gitSha` `$SHA`, `gitBranch` `main`, `vercelEnv` `production`, `supabaseProjectRef` `$NEW`. Render `/build-info` shows `git_commit` `$SHA` | L (route handler with a production deployment's environment) |
@@ -164,8 +186,8 @@ The Dec 8 window has the same setup, hours and T+ offsets. An earlier window wou
 | 2:10 | **15** | Developer; Owner (dashboard re-read) | Runbook section 8: build-info, ledger, fingerprint and orgs, read-only; `check-production $C $M --build-info … --stage final`; `record production.verify`. Owner re-reads I-2, I-3, I-10, I-11 and I-13, checks that `/login` renders, and confirms the old project is unchanged | Every row of briefing §8 *Step 15* passes | L (build-info, backend build-info, `check-production`, orgs, clock) — (settings, `/login`, old project) |
 | **2:20** | **KEEP / ROLL BACK** | Owner decides | Keep if every step-15 row passed and no §3 trigger fired. Otherwise **roll back now** (§3 R-C) | — | L (R2) |
 | 2:20 | **15b** | Developer | `$REL emit-sql census \| psql "$PRODUCTION_DB_URL_READONLY" -At -X -f - > "$DIR/census-before-step16.txt"`; `diff "$DIR/census-extras.txt" "$DIR/census-before-step16.txt"` | The diff names only `scheduled_work_attempts`, `scheduled_work_occurrences` and `scheduled_work_clock` rows: the first tick's one-time `clock_activation_certification` (F2). If anything else was written between step 9 and here, stop and do not start step 16 | L |
-| 2:25 | **16** | Operator `<operator-name>` (D12); Owner watches, and does 16.1 in the Auth dashboard | Briefing §5.6.1, 16.0–16.6. **16.0** the session (`read -rs ALLOY_OPERATOR_SERVICE_ROLE_KEY`). **16.1** the owner adds **their own existing account** (`<admin-email>`) in Authentication → Users ("Add user", email confirmed, with a password so that 16L can sign in), and the operator copies its id, `<admin-user-id>`, into `ADM`. **16.2** `tenant:create … --dry-run`. **16.3** `tenant:create` (type the slug). **16.4** `tenant:config:import plan … --expect-sha256 <export-sha256>`. **16.5** `apply` (type the first 8 characters of the org id). **16.6** the census, then `verify … --baseline "$DIR/census-before-step16.txt"` | 16.2 lists only the retired W-17 org. In 16.4 every line is `create`, with `<N> to create, 0 to complete, 0 already present, 0 present but different` and no `blocked` item (no lanes, O-LANES). 16.5 prints `✓ wrote <N> item(s)`. 16.6 prints `✓ all 9 checks passed`. Orgs: Firefly `active` and the W-17 org `retired`. `memberships` and `auth_users` show exactly the owner's account | L |
-| 2:50 | **STOP point** | Owner | — | If step 16 has not passed by T+2:50: stop (§3 R-D). Production stays verified, with no tenant, and step 16 moves to a later session with the owner and `<operator-name>` present | L (R1, R1b) |
+| 2:25 | **16** | Operator: Claude Code (D12), each command only after the owner approves it (D11); Owner approves, pastes the service-role key at 16.0, and does 16.1 in the Auth dashboard | Briefing §5.6.1, 16.0–16.6. **16.0** the session (`read -rs ALLOY_OPERATOR_SERVICE_ROLE_KEY`: the owner pastes the **new** project's service-role key at the hidden prompt). **16.1** the owner adds **their own existing account** (`<admin-email>`) in Authentication → Users ("Add user", email confirmed, with a password so that 16L can sign in), and gives the operator its id, `<admin-user-id>`, which the operator puts into `ADM`. **16.2** `tenant:create … --dry-run`. **16.3** `tenant:create` (type the slug). **16.4** `tenant:config:import plan … --expect-sha256 <export-sha256>`. **16.5** `apply` (type the first 8 characters of the org id). **16.6** the census, then `verify … --baseline "$DIR/census-before-step16.txt"` | 16.2 lists only the retired W-17 org. In 16.4 every line is `create`, with `<N> to create, 0 to complete, 0 already present, 0 present but different` and no `blocked` item (no lanes, O-LANES). 16.5 prints `✓ wrote <N> item(s)`. 16.6 prints `✓ all 9 checks passed`. Orgs: Firefly `active` and the W-17 org `retired`. `memberships` and `auth_users` show exactly the owner's account | L |
+| 2:50 | **STOP point** | Owner | — | If step 16 has not passed by T+2:50: stop (§3 R-D). Production stays verified, with no tenant, and step 16 moves to a later operator session, with the owner present and the same two rules (D11, D12) | L (R1, R1b) |
 | 2:50 | **16L** | Owner (in the app, as Firefly's admin) | Sign in at `https://www.workwithalloy.com/login` with the 16.1 account. Set up Firefly's lanes in the **Work Unit Queue** screen. No lanes are carried by the export (O-LANES); this is the owner's task right after step 16. Inviting Firefly's staff follows later (O-ADMIN) | Sign-in works; the lanes are saved and show in the queue. This is the first real sign-in to production | — |
 | 2:50 | **17** | Developer | Runbook sections 9–10: `record schema.contract --status skip`; `record release.record`; `verify-audit "$DIR/audit.jsonl"`. File the transcript and every log in `$DIR` | `verify-audit` exit 0 | L |
 | 3:00 | — | — | The window closes, 12:00 PT. The staging freeze and the staging migration restriction lift. `$DIR` is committed afterwards as the release's evidence | — | — |
@@ -216,8 +238,9 @@ Probe output: `alloy-bend-rollback-probe.txt`. There is one consequence: **do no
 old project after a rollback.** It may fail on Alloy Bend's id, and that would be a false alarm about a project D2 leaves
 as it is. After a rollback, verify with build-info and the owner's dashboard read of the old project.
 
-**R-D, step 16 fails its checks (16.R; production stays live and verified).** The operator, `<operator-name>` (D12), runs,
-while the owner watches:
+**R-D, step 16 fails its checks (16.R; production stays live and verified).** The operator, Claude Code (D12), runs the
+following, each command only after the owner approves it, with `$PRODUCTION_DB_URL` pasted by the owner at the hidden
+prompt (D11):
 `tenant:rollback-sql | psql "$PRODUCTION_DB_URL" -v org_id=… -v org_name='Firefly Early Learning'`. Afterwards the
 census must equal **`census-before-step16.txt`** and the orgs must equal step 9's. Then step 16 may be repeated from 16.2
 in the same window if the cause is fixed and the STOP point has not passed: R1b rehearsed exactly this, with the same
@@ -254,6 +277,9 @@ the removal (B3), this rehearsal and the F6 check names (B4). Each of them **clo
 5. **Before step 16:** Supabase Auth SMTP for production (I-19), if Firefly's admin will invite anyone. The owner's own
    16.1 account gets a password, so the window itself does not need SMTP.
 
+Each of these, and every dashboard step in the window, is written out click by click in the
+[owner dashboard guide](environments-owner-dashboard-guide-2026-11-26.md) (D12).
+
 **(b) Owner-approved repository steps**
 
 1. **Step 1:** merge `objective/environments-and-promotion` into `staging` (a push), and apply the W-17 migration to
@@ -264,12 +290,11 @@ the removal (B3), this rehearsal and the F6 check names (B4). Each of them **clo
 
 **(c) Owner answers**
 
-1. **Name the operator** (`<operator-name>`, D12). This person runs the step-16 commands while the owner watches, and
-   must be available on the window day, 09:00–12:00 PT, with access to the Mac mini operator session.
-2. **Rooms** (O-ROOMS): keep or drop each of the 17 rooms added after 2026-09-19, at the step-6 export review.
-3. **Approval of this plan by the end of Sun Nov 29** (step 6b, GO/NO-GO 0) for the Tue Dec 1 window; otherwise Tue Dec 8.
+1. **Rooms** (O-ROOMS): keep or drop each of the 17 rooms added after 2026-09-19, at the step-6 export review.
+2. **Approval of this plan by the end of Sun Nov 29** (step 6b, GO/NO-GO 0) for the Tue Dec 1 window; otherwise Tue Dec 8.
 
-Firefly's first admin is not an open item: it is the owner's own existing Auth account (O-ADMIN).
+Firefly's first admin is not an open item: it is the owner's own existing Auth account (O-ADMIN). The operator is not
+an open item either: it is Claude Code in the owner's operator session, each command approved by the owner (D11, D12).
 
 **After the window (owner task, not a prerequisite):** set up Firefly's lanes in the Work Unit Queue screen right after
 step 16 (16L, O-LANES), then invite Firefly's staff.
@@ -282,11 +307,16 @@ step 16 (16L, O-LANES), then invite Firefly's staff.
    came from the local E2 seed (3 sites, 17 rooms, 6 household role types, 1 process), so the real item counts are not
    known until then. The reviewers confirm that it names no lane work units.
 3. **Step 6b:** the Development Lead confirms M1–M9 and the C-rows closed, with evidence.
-4. **The Mac mini operator session:** a worktree of `$SHA`, transcript recording on, `psql` and `node`, and a clean shell
-   with no `SUPABASE_*` variables set (the tenant commands refuse otherwise).
-5. **After the window:** the committed `scripts/release/release-config.json` moves to the new ref in the next release
+4. **The Mac mini operator session:** the owner's own session, with Claude Code as the operator (D12), a worktree of
+   `$SHA`, transcript recording on, `psql` and `node`, and a clean shell with no `SUPABASE_*` variables set (the tenant
+   commands refuse otherwise).
+5. **Before the window, rehearse the two rules in that session:** with test values only, against a local stand-in, show
+   that a `read -rs` prompt the operator starts takes the owner's paste without the value reaching the transcript or
+   Claude, and that the 16.3 and 16.5 typed confirmations work there. The B3 and B4 rehearsals ran the commands but not
+   in a Claude Code session with the owner approving each one.
+6. **After the window:** the committed `scripts/release/release-config.json` moves to the new ref in the next release
    (M4).
-6. **Follow-up, not blocking:** the `serviceClientPrincipalCheck` test's pinned 27 (§1).
+7. **Follow-up, not blocking:** the `serviceClientPrincipalCheck` test's pinned 27 (§1).
 
 ## 5. Dress-rehearsal findings
 
@@ -353,12 +383,14 @@ goes wrong before Firefly is set up, production points back at it.
 2. In Supabase: create the new `us-west-2` project, its read-only role, and 7-day point-in-time recovery (step 5).
 3. Read the dashboard settings listed in §4 (a) into your secret store (step 6).
 4. At the Firefly export review: decide which of the 17 later rooms Firefly keeps (step 6).
-5. Name the operator who will type the step-16 commands while you watch (D12).
+5. Do the dashboard steps above by following the [owner dashboard guide](environments-owner-dashboard-guide-2026-11-26.md).
 6. Approve this plan (step 6b).
 
-**In the window, from you.** Type the database credentials when asked. Approve the release at your own terminal
+**In the window, from you.** You never type a command. Paste the database credentials at the hidden prompt when asked;
+they are never shown to Claude or written down. Approve the release at your own terminal
 (T+0:25). Set the platform settings (T+1:30). Add the two Vault secrets (T+2:00). Decide **keep or roll back at T+2:20**.
-Add your own existing account as Firefly's first admin (step 16.1), and watch the operator type step 16. After step 16,
+Add your own existing account as Firefly's first admin (step 16.1). Claude Code runs step 16's reviewed commands, and
+shows you each one first: it runs only the ones you say yes to. After step 16,
 sign in and set up Firefly's lanes in the Work Unit Queue screen (16L). Invite Firefly's staff afterwards.
 
 **Decision points.** There are four. Something wrong before T+0:30 means nothing has been touched, and the window moves.

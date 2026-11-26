@@ -114,13 +114,16 @@ test("the final cutover plan: no credential, the owner's window, every step and 
     assert.doesNotMatch(text, /no calendar date is fixed|booked at (step )?6b|date is booked/i, "O-WHEN: the date is decided, not booked at 6b");
     const statusNote = text.match(/^status_note: (.*)$/m)?.[1] ?? "";
     for (const d of ["Tue Dec 1, 09:00–12:00 PT", "Sun Nov 29", "Tue Dec 8, 09:00–12:00 PT"]) assert.ok(statusNote.includes(d), `status_note states ${d}`);
-    for (const o of ["O-PITR", "O-ADMIN", "O-WHEN", "D12", "O-LANES", "O-ROOMS"]) assert.match(text, new RegExp(`^\\| \\*\\*${o}\\*\\* \\|`, "m"), o);
-    // D12: a named human operator, not the Developer, types step 16 while the owner watches; the transcript is recorded.
-    assert.ok(text.includes("<operator-name>"), "D12: the operator stays a placeholder until the owner names them");
-    assert.doesNotMatch(text, /<STEP16_OPERATOR>|\*\*Operator\*\*: the Developer/, "D12: the operator is not the Developer");
-    assert.match(text, /^\| \*\*D12\*\* \|[^\n]*owner watches[^\n]*transcript is recorded/m, "D12 names who watches and the transcript");
-    assert.match(text, /^\| 2:25 \| \*\*16\*\* \| Operator `<operator-name>` \(D12\)/m, "step 16 is the named operator's");
-    assert.ok(text.includes("**Name the operator**"), "naming the operator is an owner open item");
+    for (const o of ["O-PITR", "O-ADMIN", "O-WHEN", "D11", "D12", "O-LANES", "O-ROOMS"]) assert.match(text, new RegExp(`^\\| \\*\\*${o}\\*\\* \\|`, "m"), o);
+    // D11/D12 (owner, 2026-11-26): Claude Code is the operator in the owner's session; the owner approves each command,
+    // pastes secrets at a hidden prompt, never types commands, and does every dashboard step from the owner guide.
+    assert.doesNotMatch(text, /<operator-name>|\*\*Name the operator\*\*/, "D12: the operator is decided, not a placeholder");
+    assert.match(text, /^\| \*\*D12\*\* \|[^\n]*The operator is Claude Code\*\*, running in the owner's own operator session on the Mac mini[^\n]*approves each command before it runs[^\n]*transcript is recorded/m, "D12 names the operator, the approval and the transcript");
+    assert.match(text, /^\| \*\*D11\*\* \|[^\n]*The owner never types commands[^\n]*hidden prompt \(`read -rs`\)[^\n]*Database Engineer's review/m, "D11: no typed commands, the hidden prompt, the Database Engineer's review");
+    assert.match(text, /^\| 2:25 \| \*\*16\*\* \| Operator: Claude Code \(D12\), each command only after the owner approves it \(D11\)/m, "step 16 is Claude Code's, per approved command");
+    for (const rule of ["**The per-command approval rule (D11, D12).**", "**The secret-entry rule (D11).**"]) assert.ok(text.includes(rule), rule);
+    assert.ok(text.includes("never written to a file, never typed or pasted into a command line, and\nnever shown to Claude"), "the secret-entry rule");
+    assert.ok(text.includes("environments-owner-dashboard-guide-2026-11-26.md"), "the plan names the owner dashboard guide");
     // O-PITR and O-ADMIN are decided, not open.
     assert.match(text, /^\| \*\*5\*\* \|[^\n]*enable PITR with 7-day retention/m, "step 5 enables 7-day PITR");
     assert.ok(text.includes("(a paid add-on), enabled on the new project **before the window**"), "PITR is a paid add-on, before the window");
