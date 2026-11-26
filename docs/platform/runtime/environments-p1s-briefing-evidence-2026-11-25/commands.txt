@@ -6,6 +6,9 @@ Git objects only. No fetch, no network, no credential, no hosted service.
 |---|---|
 | `staging-integration-check.txt` | `git merge-tree` and ancestry checks of this branch against `origin/staging` as last fetched (2026-11-25 10:14 local) |
 | `plan-empty-ledger-p4-candidate.json` | `node scripts/release/alloy-release.mjs plan --staging origin/staging --main origin/main --candidate refs/candidates/aly-14-p4-staging-to-main --allow-tree-diff .github/workflows/vacilando-tier2.yml --production-ledger <empty file>` (exit 1) |
+| `identify-p4-candidate-no-allowance.json` | `node scripts/release/alloy-release.mjs identify --staging origin/staging --main origin/main --candidate refs/candidates/aly-14-p4-staging-to-main` (exit 1: tree differs outside the allowed paths at `.github/workflows/vacilando-tier2.yml`) |
+| `identify-p4-candidate-with-allowance.json` | the same with `--allow-tree-diff .github/workflows/vacilando-tier2.yml` (exit 0) |
+| `drawer-strip-flag-readers.txt` | `git grep -n DrawerSummaryStripBoundary origin/staging -- web` then the same at `HEAD`: no caller outside `web/lib/layout/featureFlag.ts` and `web/tests/` |
 
 The plan was run against P4's candidate, which D1 replaces. It shows how the P6 planner treats a brand-new project's empty ledger, not the
 final migration list.

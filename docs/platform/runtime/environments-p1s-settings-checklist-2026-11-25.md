@@ -51,7 +51,7 @@ dashboard settings in §C.2 that have no environment name.
 | **R** | Required: the app is broken or unsafe without it | Set |
 | **C** | Required if that capability is live in production (payments, email, SMS, AI) | Set when the capability is on |
 | **O** | Optional; unset uses a code default | Leave unset unless the owner decides otherwise |
-| **F** | Feature flag; unset uses a code default | Owner decision: match staging only where staging sets it |
+| **F** | Feature flag; unset uses a code default | Copy staging (owner decision D6): set to staging's value where staging sets it; leave unset where staging does not |
 | **A** | Alias or fallback of another key | Leave unset, or equal to the primary |
 | **L** | Legacy path | Owner decision; usually unset |
 | **S** | Staging marker | Must not be set (or must not say `staging`) on production |
@@ -75,7 +75,7 @@ scope *before* the production build, and redeploy after any change; editing one 
 | Git deployments | `staging`, `main`, `master` only | `web/vercel.json` `git.deploymentEnabled` |
 | Production branch | `main`; production must be a Vercel **Production** deployment, not a preview alias | `deployment-and-environments.md` (environment identity) |
 | Function region | `pdx1`; chosen to sit beside the database, so check the production Supabase project's region | `web/vercel.json` `regions`; `deployment-and-environments.md` → *Compute placement* |
-| Cron | `/api/scheduled-work/wake` every 5 minutes; fires only from a Production deployment, and only sends `Authorization` when `CRON_SECRET` is set | `web/vercel.json` `crons`; P4 H2 decides whether it or `pg_cron` is the production clock |
+| Cron | `/api/scheduled-work/wake` every 5 minutes. Registers from the first **Production** deployment that carries `web/vercel.json` (`main` has none today, P4 H2), and sends `Authorization: Bearer` only when `CRON_SECRET` is set | `web/vercel.json` `crons`. Under D4 the clock is `pg_cron` + `pg_net`, as on staging: production leaves `CRON_SECRET` unset, so these calls get 401 and wake nothing (briefing §5.4) |
 | System environment variables | *Automatically expose System Environment Variables* on (the app reads `VERCEL_*` for build info and URLs) | class **P** rows below |
 | Instant Rollback | available on the plan, and who may use it | P6 owner action 7 |
 
@@ -87,7 +87,7 @@ scope *before* the production build, and redeploy after any change; editing one 
 | `ALLOY_ENVIRONMENT` | R | Set: `production` (the code's enum) | Fail-closed outbound guard: unset or any other word refuses every real recipient. Set before the guard reaches `main` | `web/lib/communications/stagingOutboundRecipientGuard.ts:13` |
 | `COMMAND_DESTRUCTIVE_PREVIEW_SECRET` | R | Set: its own secret | Production throws without it or `INTERNAL_CRON_TOKEN` | `web/lib/communications/preferences/unsubscribeToken.ts:83` |
 | `COMMUNICATION_UNSUBSCRIBE_SECRET` | R | Set: its own secret | Production throws if it and its fallbacks are all unset. Fallback chain → `COMMAND_DESTRUCTIVE_PREVIEW_SECRET` → `INTERNAL_CRON_TOKEN` | `web/lib/communications/preferences/unsubscribeToken.ts:82` |
-| `CRON_SECRET` | R | Set: a new high-entropy secret | `/api/scheduled-work/wake` bearer. Vercel Cron sends it only when set. Same value as Vault `scheduled_work_wake_credential` if that is the sender | `web/app/api/scheduled-work/wake/route.ts:46` |
+| `CRON_SECRET` | C | Leave unset on production (D4) | `/api/scheduled-work/wake` bearer, the only credential Vercel Cron can send. Unset, the cron that `web/vercel.json` registers on the first `main` deploy is refused, and `pg_cron` stays the only clock, as on staging. Needed only if a hosting scheduler is ever adopted as a clock | `web/app/api/scheduled-work/wake/route.ts:46` |
 | `INTERNAL_CRON_TOKEN` | R | Set: a new secret, same value as Render `INTERNAL_CRON_TOKEN` | `x-cron-token` for wake, `process-due` and the backend call. Also the last fallback for three signing secrets (below) | `web/app/api/admin/communication-scheduled-sends/process-due/route.ts:14` |
 | `INTERNAL_MESSAGES_PROCESS_URL` | R | Set: production backend URL + `/internal/messages/process` | Unset leaves SMS rows queued (`lib/workflowRun.ts`) | `web/lib/communications/executeLegacyCommunicationsSendAdapter.ts:443` |
 | `NEXT_PUBLIC_APP_URL` | R | Set: the production origin (`https://` + host, no path) | Build-time. Links in mail, Stripe return URL, Supabase Auth `redirectTo` (`/reset-password`, `/login`) | `web/app/api/admin/send-password-reset/route.ts:58` |
@@ -117,74 +117,74 @@ scope *before* the production build, and redeploy after any change; editing one 
 | `OPENAI_CHAT_TEMPERATURE` | O | Leave unset unless staging deliberately overrides | Code default applies | `web/lib/ai/openAiModelCapabilities.ts:15` |
 | `OPENAI_REQUEST_TIMEOUT_MS` | O | Leave unset unless staging deliberately overrides | Code default applies | `web/lib/ai/aiEnrichmentEnv.ts:52` |
 | `PUBLIC_TWILIO_WEBHOOK_BASE_URL` | O | Leave unset unless Twilio calls a different origin than `NEXT_PUBLIC_APP_URL` | Base URL for Twilio status-webhook signature checks; falls back to `NEXT_PUBLIC_APP_URL` | `web/lib/communications/twilioSmsStatusWebhook.ts:42` |
-| `AGENT_CONFIG_LAB_ENABLED` | F | Owner decision: match staging if staging sets it; else leave unset |  | `web/app/legacy-admin/agent-lab/page.tsx:8` |
-| `AGENT_V0_ENABLED` | F | Owner decision: match staging if staging sets it; else leave unset |  | `web/app/api/admin/agent/v0/queue-definition/route.ts:12` |
-| `AGENT_V1_RECORD_LAYOUT_ENABLED` | F | Owner decision: match staging if staging sets it; else leave unset |  | `web/app/api/admin/agent/v1/activity/route.ts:6` |
-| `AGENT_V2_FIELD_VISIBILITY_ENABLED` | F | Owner decision: match staging if staging sets it; else leave unset |  | `web/app/api/admin/agent/v2/field-visibility/route.ts:15` |
-| `AI_ENRICHMENT_TELEMETRY_ENABLED` | F | Owner decision: match staging if staging sets it; else leave unset |  | `web/lib/ai/aiEnrichmentEnv.ts:18` |
-| `AI_ENRICHMENT_USE_PERMISSION_REQUIRED` | F | Owner decision: match staging if staging sets it; else leave unset |  | `web/lib/ai/aiEnrichmentPermissions.ts:41` |
-| `ALLOY_ENROLLMENT_MATERIALIZE_OCM_FALLBACK` | F | Owner decision: match staging if staging sets it; else leave unset |  | `web/lib/childcareOperational/materializeEnrollmentFromProcessInstance.ts:81` |
-| `ALLOY_ENROLLMENT_QUEUE_OCM_FALLBACK` | F | Owner decision: match staging if staging sets it; else leave unset |  | `web/lib/queues/enrollmentQueueMembershipFlags.ts:9` |
-| `ALLOY_PLACEMENT_CHILD_WAITLIST_ELIGIBILITY_STRICT` | F | Owner decision: match staging if staging sets it; else leave unset |  | `web/lib/orchestration/placement/childWaitlistPlacementEligibility.ts:12` |
-| `ALLOY_PLACEMENT_HOUSEHOLD_FACTS_METADATA_FALLBACK` | F | Owner decision: match staging if staging sets it; else leave unset |  | `web/lib/orchestration/placement/householdPlacementFacts.ts:259` |
-| `ALLOY_PLACEMENT_LIFECYCLE_CANDIDATE_HOOK_DISABLED` | F | Owner decision: match staging if staging sets it; else leave unset |  | `web/lib/orchestration/placement/placementCandidateLifecycleHook.ts:435` |
-| `ALLOY_QUEUE_CHILD_GRAIN_LANES` | F | Owner decision: match staging if staging sets it; else leave unset |  | `web/lib/queues/childGrainLanesFeatureFlag.ts:26` |
-| `ALLOY_QUEUE_ENROLLMENT_CHILD_GRAIN_DISABLED` | F | Owner decision: match staging if staging sets it; else leave unset |  | `web/lib/queues/childGrainEnrollmentQueue.ts:25` |
-| `ALLOY_QUEUE_MEMBERSHIP_FROM_BUILDER` | F | Owner decision: match staging if staging sets it; else leave unset |  | `web/lib/queues/queueMembershipFromBuilderFeatureFlag.ts:11` |
-| `ALLOY_QUEUE_ROW_CONTEXT_DISABLED` | F | Owner decision: match staging if staging sets it; else leave unset |  | `web/lib/workUnits/attachQueueRowContextToItems.ts:21` |
-| `ALLOY_QUEUE_WAITLIST_CANDIDATE_GRAIN_DISABLED` | F | Owner decision: match staging if staging sets it; else leave unset |  | `web/lib/queues/candidateGrainWaitlistQueue.ts:79` |
-| `ANALYTICS_V2_METRIC_PLATFORM_ENABLED` | F | Owner decision: match staging if staging sets it; else leave unset |  | `web/lib/metrics/platform/featureFlag.ts:16` |
-| `CHILDCARE_OPERATIONAL_ENROLLMENT_V1_ENABLED` | F | Owner decision: match staging if staging sets it; else leave unset |  | `web/lib/childcareOperational/featureFlag.ts:38` |
-| `COMMUNICATION_DUAL_WRITE` | F | Owner decision: match staging if staging sets it; else leave unset |  | `web/lib/communications/communicationsEnabled.ts:3` |
-| `DOCUMENTS_MALWARE_SCANNER_ENABLED` | F | Owner decision: match staging if staging sets it; else leave unset |  | `web/lib/documents/malware/inboundReevaluation.ts:35` |
-| `DRAWER_SUMMARY_STRIP_BOUNDARY` | F | Owner decision: match staging if staging sets it; else leave unset | Unset defaults OFF in production and ON in staging, so staging's behaviour is not production's by default | `web/lib/layout/featureFlag.ts:287` |
-| `FIELD_REQUIREMENT_POLICY_ENFORCEMENT_ENABLED` | F | Owner decision: match staging if staging sets it; else leave unset |  | `web/lib/fields/fieldRequirementPolicyEnv.ts:7` |
-| `FOCUS_PANEL_LAYOUT_RUNTIME_ENABLED` | F | Owner decision: match staging if staging sets it; else leave unset |  | `web/lib/layout/featureFlag.ts:255` |
-| `INBOUND_EMAIL_ATTACHMENT_RETRIEVAL_ENABLED` | F | Owner decision: match staging if staging sets it; else leave unset |  | `web/lib/communications/email/inboundAttachmentRetrieval.ts:9` |
-| `LAYOUT_RUNTIME_CHILD_DRAWER` | F | Owner decision: match staging if staging sets it; else leave unset |  | `web/lib/layout/featureFlag.ts:175` |
-| `LAYOUT_RUNTIME_ENABLED` | F | Owner decision: match staging if staging sets it; else leave unset |  | `web/lib/layout/featureFlag.ts:69` |
-| `LAYOUT_RUNTIME_LEGACY_EMERGENCY_FALLBACK` | F | Owner decision: match staging if staging sets it; else leave unset |  | `web/lib/layout/featureFlag.ts:31` |
-| `LAYOUT_RUNTIME_OPPORTUNITY_DRAWER` | F | Owner decision: match staging if staging sets it; else leave unset |  | `web/lib/layout/featureFlag.ts:93` |
-| `LAYOUT_RUNTIME_OPPORTUNITY_DRAWER_ENTITY_LAYOUTS_VISUAL_CONFIG` | F | Owner decision: match staging if staging sets it; else leave unset |  | `web/lib/layout/featureFlag.ts:145` |
-| `LAYOUT_RUNTIME_OPPORTUNITY_QUEUE` | F | Owner decision: match staging if staging sets it; else leave unset |  | `web/lib/layout/featureFlag.ts:192` |
-| `LAYOUT_RUNTIME_PERSON_DRAWER` | F | Owner decision: match staging if staging sets it; else leave unset |  | `web/lib/layout/featureFlag.ts:158` |
-| `LAYOUT_RUNTIME_SHADOW_ENABLED` | F | Owner decision: match staging if staging sets it; else leave unset |  | `web/lib/layout/featureFlag.ts:79` |
-| `LAYOUT_V2_PREVIEW_ENABLED` | F | Owner decision: match staging if staging sets it; else leave unset |  | `web/lib/layout/featureFlag.ts:64` |
-| `NEXT_PUBLIC_ADMINV2_DRAWER_BOOTSTRAP` | F | Owner decision: match staging if staging sets it; else leave unset | Build-time | `web/lib/admin/opportunityDrawerBootstrapClient.ts:11` |
-| `NEXT_PUBLIC_ADMINV2_DRAWER_VM` | F | Owner decision: match staging if staging sets it; else leave unset | Build-time | `web/lib/adminV2/viewModel/drawer/shadow/logDrawerViewModelCutover.ts:34` |
-| `NEXT_PUBLIC_ADMIN_V2_SOFT_SIDEBAR_NAV` | F | Owner decision: match staging if staging sets it; else leave unset | Build-time | `web/lib/adminV2/shellNavigation.ts:32` |
-| `NEXT_PUBLIC_AGENT_LAB_ASSISTANT_ENABLED` | F | Owner decision: match staging if staging sets it; else leave unset | Build-time | `web/components/admin/agentLab/AgentLabAssistantPanel.tsx:17` |
-| `NEXT_PUBLIC_ALLOY_OS_IDLE_LOGOUT` | F | Owner decision: match staging if staging sets it; else leave unset | Build-time | `web/lib/adminV2/runtime/useIdleSessionLogout.ts:16` |
-| `NEXT_PUBLIC_ANALYTICS_V2_METRIC_PLATFORM_ENABLED` | F | Owner decision: match staging if staging sets it; else leave unset | Build-time | `web/lib/metrics/platform/featureFlag.ts:20` |
-| `NEXT_PUBLIC_BOS_CREATE_LEAD_SESSION` | F | Owner decision: match staging if staging sets it; else leave unset | Build-time | `web/lib/bos/commandSession/bosCreateLeadSessionFlag.ts:6` |
-| `NEXT_PUBLIC_CHILDCARE_OPERATIONAL_ENROLLMENT_V1_ENABLED` | F | Owner decision: match staging if staging sets it; else leave unset | Build-time | `web/lib/childcareOperational/featureFlag.ts:43` |
-| `NEXT_PUBLIC_COMMS_V2_ANNOUNCEMENTS` | F | Owner decision: match staging if staging sets it; else leave unset | Build-time | `web/lib/communications/v2/flags.ts:104` |
-| `NEXT_PUBLIC_COMMS_V2_ASSIGNMENT` | F | Owner decision: match staging if staging sets it; else leave unset | Build-time | `web/lib/communications/v2/flags.ts:98` |
-| `NEXT_PUBLIC_COMMS_V2_BOS` | F | Owner decision: match staging if staging sets it; else leave unset | Build-time | `web/lib/communications/v2/flags.ts:108` |
-| `NEXT_PUBLIC_COMMS_V2_COMMAND_CENTER` | F | Owner decision: match staging if staging sets it; else leave unset | Build-time | `web/lib/communications/v2/flags.ts:88` |
-| `NEXT_PUBLIC_COMMS_V2_COMPLIANCE` | F | Owner decision: match staging if staging sets it; else leave unset | Build-time | `web/lib/communications/v2/flags.ts:96` |
-| `NEXT_PUBLIC_COMMS_V2_COMPOSER` | F | Owner decision: match staging if staging sets it; else leave unset | Build-time | `web/lib/communications/v2/flags.ts:92` |
-| `NEXT_PUBLIC_COMMS_V2_DELIVERABILITY` | F | Owner decision: match staging if staging sets it; else leave unset | Build-time | `web/lib/communications/v2/flags.ts:106` |
-| `NEXT_PUBLIC_COMMS_V2_LIVE_WORKSPACE` | F | Owner decision: match staging if staging sets it; else leave unset | Build-time | `web/lib/communications/v2/flags.ts:110` |
-| `NEXT_PUBLIC_COMMS_V2_PREFERENCES` | F | Owner decision: match staging if staging sets it; else leave unset | Build-time | `web/lib/communications/v2/flags.ts:94` |
-| `NEXT_PUBLIC_COMMS_V2_RECORD_TAB` | F | Owner decision: match staging if staging sets it; else leave unset | Build-time | `web/lib/communications/v2/flags.ts:90` |
-| `NEXT_PUBLIC_COMMS_V2_SLA` | F | Owner decision: match staging if staging sets it; else leave unset | Build-time | `web/lib/communications/v2/flags.ts:100` |
-| `NEXT_PUBLIC_COMMS_V2_TEMPLATES` | F | Owner decision: match staging if staging sets it; else leave unset | Build-time | `web/lib/communications/v2/flags.ts:102` |
-| `NEXT_PUBLIC_CONFIGURATION_RUNTIME_PHASE_3A` | F | Owner decision: match staging if staging sets it; else leave unset | Build-time | `web/lib/adminV2/runtime/configurationRuntimeConvergenceFlag.ts:12` |
-| `NEXT_PUBLIC_DRAWER_SUMMARY_STRIP_BOUNDARY` | F | Owner decision: match staging if staging sets it; else leave unset | Build-time. Same environment-dependent default | `web/lib/layout/featureFlag.ts:291` |
-| `NEXT_PUBLIC_FOCUS_PANEL_LAYOUT_RUNTIME_ENABLED` | F | Owner decision: match staging if staging sets it; else leave unset | Build-time | `web/lib/layout/featureFlag.ts:259` |
-| `NEXT_PUBLIC_LAYOUT_RUNTIME_CHILD_DRAWER` | F | Owner decision: match staging if staging sets it; else leave unset | Build-time | `web/lib/layout/featureFlag.ts:179` |
-| `NEXT_PUBLIC_LAYOUT_RUNTIME_ENABLED` | F | Owner decision: match staging if staging sets it; else leave unset | Build-time | `web/lib/layout/featureFlag.ts:74` |
-| `NEXT_PUBLIC_LAYOUT_RUNTIME_LEGACY_EMERGENCY_FALLBACK` | F | Owner decision: match staging if staging sets it; else leave unset | Build-time | `web/lib/layout/featureFlag.ts:35` |
-| `NEXT_PUBLIC_LAYOUT_RUNTIME_OPPORTUNITY_DRAWER` | F | Owner decision: match staging if staging sets it; else leave unset | Build-time | `web/lib/layout/featureFlag.ts:97` |
-| `NEXT_PUBLIC_LAYOUT_RUNTIME_OPPORTUNITY_DRAWER_ENTITY_LAYOUTS_VISUAL_CONFIG` | F | Owner decision: match staging if staging sets it; else leave unset | Build-time | `web/lib/layout/featureFlag.ts:152` |
-| `NEXT_PUBLIC_LAYOUT_RUNTIME_OPPORTUNITY_QUEUE` | F | Owner decision: match staging if staging sets it; else leave unset | Build-time | `web/lib/layout/featureFlag.ts:196` |
-| `NEXT_PUBLIC_LAYOUT_RUNTIME_PERSON_DRAWER` | F | Owner decision: match staging if staging sets it; else leave unset | Build-time | `web/lib/layout/featureFlag.ts:162` |
-| `NEXT_PUBLIC_LAYOUT_RUNTIME_SHADOW_ENABLED` | F | Owner decision: match staging if staging sets it; else leave unset | Build-time | `web/lib/layout/featureFlag.ts:83` |
-| `NEXT_PUBLIC_LAYOUT_V2_PREVIEW_ENABLED` | F | Owner decision: match staging if staging sets it; else leave unset | Build-time | `web/lib/layout/featureFlag.ts:26` |
-| `NEXT_PUBLIC_OPERATIONAL_WORK_V1_ENABLED` | F | Owner decision: match staging if staging sets it; else leave unset | Build-time | `web/lib/admin/operationalWork/operationalWorkV1UiGate.ts:9` |
-| `NEXT_PUBLIC_TASK_ASSIST_V1_ENABLED` | F | Owner decision: match staging if staging sets it; else leave unset | Build-time | `web/lib/adminV2/viewModel/drawer/opportunity/initialPanelResource.ts:74` |
-| `OE_LEDGER_AUTHOR_ENABLED` | F | Owner decision: match staging if staging sets it; else leave unset |  | `web/lib/operationalExpectations/intake/ledgerAuthoringFeatureFlag.ts:34` |
+| `AGENT_CONFIG_LAB_ENABLED` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/app/legacy-admin/agent-lab/page.tsx:8` |
+| `AGENT_V0_ENABLED` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/app/api/admin/agent/v0/queue-definition/route.ts:12` |
+| `AGENT_V1_RECORD_LAYOUT_ENABLED` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/app/api/admin/agent/v1/activity/route.ts:6` |
+| `AGENT_V2_FIELD_VISIBILITY_ENABLED` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/app/api/admin/agent/v2/field-visibility/route.ts:15` |
+| `AI_ENRICHMENT_TELEMETRY_ENABLED` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/lib/ai/aiEnrichmentEnv.ts:18` |
+| `AI_ENRICHMENT_USE_PERMISSION_REQUIRED` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/lib/ai/aiEnrichmentPermissions.ts:41` |
+| `ALLOY_ENROLLMENT_MATERIALIZE_OCM_FALLBACK` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/lib/childcareOperational/materializeEnrollmentFromProcessInstance.ts:81` |
+| `ALLOY_ENROLLMENT_QUEUE_OCM_FALLBACK` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/lib/queues/enrollmentQueueMembershipFlags.ts:9` |
+| `ALLOY_PLACEMENT_CHILD_WAITLIST_ELIGIBILITY_STRICT` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/lib/orchestration/placement/childWaitlistPlacementEligibility.ts:12` |
+| `ALLOY_PLACEMENT_HOUSEHOLD_FACTS_METADATA_FALLBACK` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/lib/orchestration/placement/householdPlacementFacts.ts:259` |
+| `ALLOY_PLACEMENT_LIFECYCLE_CANDIDATE_HOOK_DISABLED` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/lib/orchestration/placement/placementCandidateLifecycleHook.ts:435` |
+| `ALLOY_QUEUE_CHILD_GRAIN_LANES` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/lib/queues/childGrainLanesFeatureFlag.ts:26` |
+| `ALLOY_QUEUE_ENROLLMENT_CHILD_GRAIN_DISABLED` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/lib/queues/childGrainEnrollmentQueue.ts:25` |
+| `ALLOY_QUEUE_MEMBERSHIP_FROM_BUILDER` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/lib/queues/queueMembershipFromBuilderFeatureFlag.ts:11` |
+| `ALLOY_QUEUE_ROW_CONTEXT_DISABLED` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/lib/workUnits/attachQueueRowContextToItems.ts:21` |
+| `ALLOY_QUEUE_WAITLIST_CANDIDATE_GRAIN_DISABLED` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/lib/queues/candidateGrainWaitlistQueue.ts:79` |
+| `ANALYTICS_V2_METRIC_PLATFORM_ENABLED` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/lib/metrics/platform/featureFlag.ts:16` |
+| `CHILDCARE_OPERATIONAL_ENROLLMENT_V1_ENABLED` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/lib/childcareOperational/featureFlag.ts:38` |
+| `COMMUNICATION_DUAL_WRITE` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/lib/communications/communicationsEnabled.ts:3` |
+| `DOCUMENTS_MALWARE_SCANNER_ENABLED` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/lib/documents/malware/inboundReevaluation.ts:35` |
+| `DRAWER_SUMMARY_STRIP_BOUNDARY` | F | Copy staging (D6): staging's value if staging sets it; else unset | Unset defaults OFF in production and ON in staging (`featureFlag.ts:266-276`). No runtime code calls the reader (only `web/tests/`), so the difference changes nothing today and the D6 rule alone preserves staging's behaviour. If a caller appears and staging leaves it unset, set `1` | `web/lib/layout/featureFlag.ts:287` |
+| `FIELD_REQUIREMENT_POLICY_ENFORCEMENT_ENABLED` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/lib/fields/fieldRequirementPolicyEnv.ts:7` |
+| `FOCUS_PANEL_LAYOUT_RUNTIME_ENABLED` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/lib/layout/featureFlag.ts:255` |
+| `INBOUND_EMAIL_ATTACHMENT_RETRIEVAL_ENABLED` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/lib/communications/email/inboundAttachmentRetrieval.ts:9` |
+| `LAYOUT_RUNTIME_CHILD_DRAWER` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/lib/layout/featureFlag.ts:175` |
+| `LAYOUT_RUNTIME_ENABLED` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/lib/layout/featureFlag.ts:69` |
+| `LAYOUT_RUNTIME_LEGACY_EMERGENCY_FALLBACK` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/lib/layout/featureFlag.ts:31` |
+| `LAYOUT_RUNTIME_OPPORTUNITY_DRAWER` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/lib/layout/featureFlag.ts:93` |
+| `LAYOUT_RUNTIME_OPPORTUNITY_DRAWER_ENTITY_LAYOUTS_VISUAL_CONFIG` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/lib/layout/featureFlag.ts:145` |
+| `LAYOUT_RUNTIME_OPPORTUNITY_QUEUE` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/lib/layout/featureFlag.ts:192` |
+| `LAYOUT_RUNTIME_PERSON_DRAWER` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/lib/layout/featureFlag.ts:158` |
+| `LAYOUT_RUNTIME_SHADOW_ENABLED` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/lib/layout/featureFlag.ts:79` |
+| `LAYOUT_V2_PREVIEW_ENABLED` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/lib/layout/featureFlag.ts:64` |
+| `NEXT_PUBLIC_ADMINV2_DRAWER_BOOTSTRAP` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/admin/opportunityDrawerBootstrapClient.ts:11` |
+| `NEXT_PUBLIC_ADMINV2_DRAWER_VM` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/adminV2/viewModel/drawer/shadow/logDrawerViewModelCutover.ts:34` |
+| `NEXT_PUBLIC_ADMIN_V2_SOFT_SIDEBAR_NAV` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/adminV2/shellNavigation.ts:32` |
+| `NEXT_PUBLIC_AGENT_LAB_ASSISTANT_ENABLED` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/components/admin/agentLab/AgentLabAssistantPanel.tsx:17` |
+| `NEXT_PUBLIC_ALLOY_OS_IDLE_LOGOUT` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/adminV2/runtime/useIdleSessionLogout.ts:16` |
+| `NEXT_PUBLIC_ANALYTICS_V2_METRIC_PLATFORM_ENABLED` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/metrics/platform/featureFlag.ts:20` |
+| `NEXT_PUBLIC_BOS_CREATE_LEAD_SESSION` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/bos/commandSession/bosCreateLeadSessionFlag.ts:6` |
+| `NEXT_PUBLIC_CHILDCARE_OPERATIONAL_ENROLLMENT_V1_ENABLED` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/childcareOperational/featureFlag.ts:43` |
+| `NEXT_PUBLIC_COMMS_V2_ANNOUNCEMENTS` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/communications/v2/flags.ts:104` |
+| `NEXT_PUBLIC_COMMS_V2_ASSIGNMENT` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/communications/v2/flags.ts:98` |
+| `NEXT_PUBLIC_COMMS_V2_BOS` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/communications/v2/flags.ts:108` |
+| `NEXT_PUBLIC_COMMS_V2_COMMAND_CENTER` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/communications/v2/flags.ts:88` |
+| `NEXT_PUBLIC_COMMS_V2_COMPLIANCE` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/communications/v2/flags.ts:96` |
+| `NEXT_PUBLIC_COMMS_V2_COMPOSER` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/communications/v2/flags.ts:92` |
+| `NEXT_PUBLIC_COMMS_V2_DELIVERABILITY` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/communications/v2/flags.ts:106` |
+| `NEXT_PUBLIC_COMMS_V2_LIVE_WORKSPACE` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/communications/v2/flags.ts:110` |
+| `NEXT_PUBLIC_COMMS_V2_PREFERENCES` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/communications/v2/flags.ts:94` |
+| `NEXT_PUBLIC_COMMS_V2_RECORD_TAB` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/communications/v2/flags.ts:90` |
+| `NEXT_PUBLIC_COMMS_V2_SLA` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/communications/v2/flags.ts:100` |
+| `NEXT_PUBLIC_COMMS_V2_TEMPLATES` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/communications/v2/flags.ts:102` |
+| `NEXT_PUBLIC_CONFIGURATION_RUNTIME_PHASE_3A` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/adminV2/runtime/configurationRuntimeConvergenceFlag.ts:12` |
+| `NEXT_PUBLIC_DRAWER_SUMMARY_STRIP_BOUNDARY` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time. Same environment-dependent default and the same finding: no runtime caller | `web/lib/layout/featureFlag.ts:291` |
+| `NEXT_PUBLIC_FOCUS_PANEL_LAYOUT_RUNTIME_ENABLED` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/layout/featureFlag.ts:259` |
+| `NEXT_PUBLIC_LAYOUT_RUNTIME_CHILD_DRAWER` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/layout/featureFlag.ts:179` |
+| `NEXT_PUBLIC_LAYOUT_RUNTIME_ENABLED` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/layout/featureFlag.ts:74` |
+| `NEXT_PUBLIC_LAYOUT_RUNTIME_LEGACY_EMERGENCY_FALLBACK` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/layout/featureFlag.ts:35` |
+| `NEXT_PUBLIC_LAYOUT_RUNTIME_OPPORTUNITY_DRAWER` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/layout/featureFlag.ts:97` |
+| `NEXT_PUBLIC_LAYOUT_RUNTIME_OPPORTUNITY_DRAWER_ENTITY_LAYOUTS_VISUAL_CONFIG` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/layout/featureFlag.ts:152` |
+| `NEXT_PUBLIC_LAYOUT_RUNTIME_OPPORTUNITY_QUEUE` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/layout/featureFlag.ts:196` |
+| `NEXT_PUBLIC_LAYOUT_RUNTIME_PERSON_DRAWER` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/layout/featureFlag.ts:162` |
+| `NEXT_PUBLIC_LAYOUT_RUNTIME_SHADOW_ENABLED` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/layout/featureFlag.ts:83` |
+| `NEXT_PUBLIC_LAYOUT_V2_PREVIEW_ENABLED` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/layout/featureFlag.ts:26` |
+| `NEXT_PUBLIC_OPERATIONAL_WORK_V1_ENABLED` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/admin/operationalWork/operationalWorkV1UiGate.ts:9` |
+| `NEXT_PUBLIC_TASK_ASSIST_V1_ENABLED` | F | Copy staging (D6): staging's value if staging sets it; else unset | Build-time | `web/lib/adminV2/viewModel/drawer/opportunity/initialPanelResource.ts:74` |
+| `OE_LEDGER_AUTHOR_ENABLED` | F | Copy staging (D6): staging's value if staging sets it; else unset |  | `web/lib/operationalExpectations/intake/ledgerAuthoringFeatureFlag.ts:34` |
 | `ALLOY_PUBLIC_APP_URL` | A | Leave unset, or equal to `NEXT_PUBLIC_APP_URL` | Fallback origin after `NEXT_PUBLIC_APP_URL` and `APP_CANONICAL_URL` | `web/lib/publicAppUrl.ts:128` |
 | `APP_CANONICAL_URL` | A | Leave unset, or equal to `NEXT_PUBLIC_APP_URL` | Fallback origin after `NEXT_PUBLIC_APP_URL` | `web/lib/publicAppUrl.ts:127` |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE` | A | Leave unset | Older name, read only when the canonical one is empty | `web/lib/financials/payments/stripePublishableKey.ts:33` |
@@ -325,8 +325,8 @@ each one after the first promotion's schema step.
 | `extension:pgcrypto` | R | Enabled (migration creates it) |  | `supabase/migrations/20260329165048_remote_schema.sql:40` |
 | `extension:supabase_vault` | R | Enabled (migration creates it) | Holds the two wake secrets and org-owned provider credentials | `supabase/migrations/20260329165048_remote_schema.sql:47` |
 | `extension:uuid-ossp` | R | Enabled (migration creates it) |  | `supabase/migrations/20260329165048_remote_schema.sql:54` |
-| `scheduled_work_wake_credential` | R | Create in Vault: equal to Vercel `CRON_SECRET` or `INTERNAL_CRON_TOKEN` (the job sends it as both the bearer and `x-cron-token`) | Without it the job sends no request rows (its `FROM` returns nothing) | `supabase/migrations/20261002120000_scheduled_work_clock_pg_cron.sql:59` |
-| `scheduled_work_wake_url` | R | Create in Vault: the production origin + `/api/scheduled-work/wake` | **Unset falls back to the staging URL** in the `pg_cron` job, so a production clock without it wakes staging | `supabase/migrations/20261002120000_scheduled_work_clock_pg_cron.sql:48` |
+| `scheduled_work_wake_credential` | R | Create in Vault **after** `scheduled_work_wake_url`: equal to production `INTERNAL_CRON_TOKEN` (the job sends it as both the bearer and `x-cron-token`; with `CRON_SECRET` unset under D4, the `x-cron-token` path admits it) | Without it the job sends no request rows (its `FROM` returns nothing) | `supabase/migrations/20261002120000_scheduled_work_clock_pg_cron.sql:59` |
+| `scheduled_work_wake_url` | R | Create in Vault **first**: the production origin + `/api/scheduled-work/wake` | **Unset falls back to the staging URL** in the `pg_cron` job, so a production clock without it wakes staging | `supabase/migrations/20261002120000_scheduled_work_clock_pg_cron.sql:48` |
 | `extension:pg_graphql` | O | Present in the baseline schema; no runtime code calls GraphQL |  | `supabase/migrations/20260329165048_remote_schema.sql:26` |
 | `extension:pg_stat_statements` | O | Present in the baseline schema; diagnostics only |  | `supabase/migrations/20260329165048_remote_schema.sql:33` |
 <!-- /settings -->
@@ -351,7 +351,7 @@ each one after the first promotion's schema step.
 | Supabase project | Vercel `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_URL`; Render `SUPABASE_URL`; the keys beside them | One production project ref for all of them |
 | `ALLOY_ENVIRONMENT` | Vercel Production scope and the Render production service | Both say production, before the outbound guard reaches `main` (`deployment-and-environments.md`) |
 | `INTERNAL_CRON_TOKEN` | Vercel and Render | Same secret: the web app sends it to the backend |
-| Wake credential | Vercel `CRON_SECRET` (or `INTERNAL_CRON_TOKEN`) and Vault `scheduled_work_wake_credential` | Equal, if `pg_cron` is the production clock |
+| Wake credential | Vercel and Render `INTERNAL_CRON_TOKEN` and Vault `scheduled_work_wake_credential` | Equal (D4: `pg_cron` is the production clock; `CRON_SECRET` unset) |
 | Wake URL | Vault `scheduled_work_wake_url` and the production origin | Must point at production; unset, the job wakes **staging** |
 | Backend URL | Vercel `INTERNAL_MESSAGES_PROCESS_URL` and the Render service's public URL | The production service, never the staging one |
 | Origin | Vercel `NEXT_PUBLIC_APP_URL`, Supabase Site URL and redirect URLs, Render `COMMUNICATIONS_TWILIO_INBOUND_VALIDATION_BASE_URL` (the backend's own origin) | One production origin per service |
@@ -367,9 +367,10 @@ separate secret for each.
 ## E. What the code cannot tell you (uncovered)
 
 1. **Staging's actual settings.** Which F, O and L keys staging sets, and to what, needs the Vercel and Render dashboards.
-   For each F row, read whether the name exists on staging and decide. Without that, production gets the code defaults,
-   and those differ from staging's behaviour in at least one place (`DRAWER_SUMMARY_STRIP_BOUNDARY` defaults on in staging
-   and off in production).
+   For F rows the owner has decided (D6): each key staging sets is copied to production with staging's value; a key staging
+   leaves unset stays unset. Only the copying is left, not a choice. The one F pair whose unset default differs between
+   staging and production (`DRAWER_SUMMARY_STRIP_BOUNDARY`, `NEXT_PUBLIC_DRAWER_SUMMARY_STRIP_BOUNDARY`) has no runtime
+   caller, so the copy rule preserves staging's behaviour without setting it explicitly.
 2. **Keys set on a platform that no code reads.** Not detectable from code. Anything on staging's lists that is not in
    this document should not be carried. One example is already in the repo: `backend/README_MESSAGES_SENDER.md` lists
    `TWILIO_FROM_NUMBER` as required, and no backend code reads it.
@@ -395,11 +396,12 @@ document lists it. At cutover, in the order the code needs:
 1. Before the first production build: every **R** row in A.2 and the **C** rows for the capabilities going live. The
    `NEXT_PUBLIC_*` rows must be in place before `next build`.
 2. Before the backend serves production traffic: the **R** and **C** rows in B.2, with the §D pairs matching.
-3. After the schema step: §C.1 (extensions, bucket, the two Vault secrets), then the clock decision (P4 H2).
+3. After the schema step: §C.1 extensions and bucket. After the first `main` deploy: Vault `scheduled_work_wake_url`, then
+   `scheduled_work_wake_credential` (D4: `pg_cron` + `pg_net`, as on staging; `CRON_SECRET` unset).
 4. §C.2 before the first invite or password reset goes out.
 5. Every **S** and **X** row checked **absent** on the production scopes.
 
-The ordered runbook for the first promotion, with each issue above labelled and the owner's decisions D1–D8 applied, is the
+The ordered runbook for the first promotion, with each issue above labelled and the owner's settled decisions D1–D8 applied, is the
 [first-promotion briefing](environments-p1s-first-promotion-briefing-2026-11-25.md).
 
 ## Not a setting (scanner candidates excluded)
