@@ -1,0 +1,113 @@
+TAP version 13
+# Subtest: routine release: every control passes in order, production ends identical to staging
+ok 1 - routine release: every control passes in order, production ends identical to staging
+  ---
+  duration_ms: 2310.589458
+  type: 'test'
+  ...
+# Subtest: no owner approval: stops before the first production action
+ok 2 - no owner approval: stops before the first production action
+  ---
+  duration_ms: 1408.63425
+  type: 'test'
+  ...
+# Subtest: expired approval is refused
+ok 3 - expired approval is refused
+  ---
+  duration_ms: 1373.611167
+  type: 'test'
+  ...
+# Subtest: approval bound to another manifest is refused (candidate or plan changed after approval)
+ok 4 - approval bound to another manifest is refused (candidate or plan changed after approval)
+  ---
+  duration_ms: 1372.145833
+  type: 'test'
+  ...
+# Subtest: staging verification: a red required check blocks before any manifest exists
+ok 5 - staging verification: a red required check blocks before any manifest exists
+  ---
+  duration_ms: 1228.4515
+  type: 'test'
+  ...
+# Subtest: staging verification: ALY-14 — a second school on staging blocks
+ok 6 - staging verification: ALY-14 — a second school on staging blocks
+  ---
+  duration_ms: 1277.6745
+  type: 'test'
+  ...
+# Subtest: staging verification: staging without Firefly blocks
+ok 7 - staging verification: staging without Firefly blocks
+  ---
+  duration_ms: 1295.481375
+  type: 'test'
+  ...
+# Subtest: preflight: a production ledger version with no candidate file blocks (C1 orphan)
+ok 8 - preflight: a production ledger version with no candidate file blocks (C1 orphan)
+  ---
+  duration_ms: 1387.634417
+  type: 'test'
+  ...
+# Subtest: schema.expand: a failing migration halts before the code deploy; old build keeps serving
+ok 9 - schema.expand: a failing migration halts before the code deploy; old build keeps serving
+  ---
+  duration_ms: 1911.446875
+  type: 'test'
+  ...
+# Subtest: schema.expand: production ledger changed after approval is refused
+ok 10 - schema.expand: production ledger changed after approval is refused
+  ---
+  duration_ms: 1736.094709
+  type: 'test'
+  ...
+# Subtest: code.deploy: main moved after approval — compare-and-swap refuses, schema stays additive
+ok 11 - code.deploy: main moved after approval — compare-and-swap refuses, schema stays additive
+  ---
+  duration_ms: 1833.185084
+  type: 'test'
+  ...
+# Subtest: production.verify fails (stale build served) → code rollback to the previous build
+ok 12 - production.verify fails (stale build served) → code rollback to the previous build
+  ---
+  duration_ms: 2654.68725
+  type: 'test'
+  ...
+# Subtest: production.verify: ALY-14 — a ZZ Alloy QA org in production fails verification and rolls back
+ok 13 - production.verify: ALY-14 — a ZZ Alloy QA org in production fails verification and rolls back
+  ---
+  duration_ms: 2031.100625
+  type: 'test'
+  ...
+# Subtest: contract migration at the tail ships after the code deploy when schema_contract is granted
+ok 14 - contract migration at the tail ships after the code deploy when schema_contract is granted
+  ---
+  duration_ms: 2196.726625
+  type: 'test'
+  ...
+# Subtest: contract migration without schema_contract: release goes live, destructive change held
+ok 15 - contract migration without schema_contract: release goes live, destructive change held
+  ---
+  duration_ms: 1916.203292
+  type: 'test'
+  ...
+# Subtest: preflight: a destructive migration before an additive one blocks the release
+ok 16 - preflight: a destructive migration before an additive one blocks the release
+  ---
+  duration_ms: 1351.232708
+  type: 'test'
+  ...
+# Subtest: the rehearsal database is a labelled, network-less throwaway
+ok 17 - the rehearsal database is a labelled, network-less throwaway
+  ---
+  duration_ms: 28.802917
+  type: 'test'
+  ...
+1..17
+# tests 17
+# suites 0
+# pass 17
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 28607.817542
+exit=0

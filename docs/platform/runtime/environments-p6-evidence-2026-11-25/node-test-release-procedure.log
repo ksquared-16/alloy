@@ -1,0 +1,155 @@
+TAP version 13
+# Subtest: procedure order: approval precedes every production step; contract follows the deploy
+ok 1 - procedure order: approval precedes every production step; contract follows the deploy
+  ---
+  duration_ms: 0.675
+  type: 'test'
+  ...
+# Subtest: canonical JSON is key-order independent
+ok 2 - canonical JSON is key-order independent
+  ---
+  duration_ms: 0.245584
+  type: 'test'
+  ...
+# Subtest: classify: additive and guarded statements are expand
+ok 3 - classify: additive and guarded statements are expand
+  ---
+  duration_ms: 0.89925
+  type: 'test'
+  ...
+# Subtest: classify: destructive statements are contract
+ok 4 - classify: destructive statements are contract
+  ---
+  duration_ms: 0.658709
+  type: 'test'
+  ...
+# Subtest: classify: a DELETE inside a function body, a comment or a string is not a migration-time delete
+ok 5 - classify: a DELETE inside a function body, a comment or a string is not a migration-time delete
+  ---
+  duration_ms: 0.085125
+  type: 'test'
+  ...
+# Subtest: classify: C4 idempotency warnings
+ok 6 - classify: C4 idempotency warnings
+  ---
+  duration_ms: 0.039
+  type: 'test'
+  ...
+# Subtest: plan: unknown production ledger blocks
+ok 7 - plan: unknown production ledger blocks
+  ---
+  duration_ms: 0.191791
+  type: 'test'
+  ...
+# Subtest: plan: pending migrations in version order, split expand/contract
+ok 8 - plan: pending migrations in version order, split expand/contract
+  ---
+  duration_ms: 5.471584
+  type: 'test'
+  ...
+# Subtest: plan: nothing pending is a noop
+ok 9 - plan: nothing pending is a noop
+  ---
+  duration_ms: 0.20725
+  type: 'test'
+  ...
+# Subtest: plan: blockers — orphan, out of order, renumbered duplicate, changed in place, baseline collision, contract not last
+ok 10 - plan: blockers — orphan, out of order, renumbered duplicate, changed in place, baseline collision, contract not last
+  ---
+  duration_ms: 0.371541
+  type: 'test'
+  ...
+# Subtest: apply wrapper records the ledger row in the same text it runs
+ok 11 - apply wrapper records the ledger row in the same text it runs
+  ---
+  duration_ms: 0.099917
+  type: 'test'
+  ...
+# Subtest: staging tenancy: Firefly + ZZ Alloy QA passes; a retired self-test org is a warning only
+ok 12 - staging tenancy: Firefly + ZZ Alloy QA passes; a retired self-test org is a warning only
+  ---
+  duration_ms: 0.077875
+  type: 'test'
+  ...
+# Subtest: staging tenancy: another school, or no Firefly, fails
+ok 13 - staging tenancy: another school, or no Firefly, fails
+  ---
+  duration_ms: 0.04325
+  type: 'test'
+  ...
+# Subtest: production isolation: QA orgs, staging-seed namespace and live self-test orgs fail; real schools pass
+ok 14 - production isolation: QA orgs, staging-seed namespace and live self-test orgs fail; real schools pass
+  ---
+  duration_ms: 0.079041
+  type: 'test'
+  ...
+# Subtest: staging.verify: identity, CI on the candidate SHA, ledger equality, tenancy
+ok 15 - staging.verify: identity, CI on the candidate SHA, ledger equality, tenancy
+  ---
+  duration_ms: 0.178375
+  type: 'test'
+  ...
+# Subtest: production.verify: identity, ledger, fingerprint, RLS
+ok 16 - production.verify: identity, ledger, fingerprint, RLS
+  ---
+  duration_ms: 0.066667
+  type: 'test'
+  ...
+# Subtest: approval: a valid owner approval binds candidate, manifest and staging verification
+ok 17 - approval: a valid owner approval binds candidate, manifest and staging verification
+  ---
+  duration_ms: 0.725667
+  type: 'test'
+  ...
+# Subtest: approval: every way it can be wrong is refused
+ok 18 - approval: every way it can be wrong is refused
+  ---
+  duration_ms: 0.28525
+  type: 'test'
+  ...
+# Subtest: approval: a production approval cannot be recorded from an agent session or without a terminal
+ok 19 - approval: a production approval cannot be recorded from an agent session or without a terminal
+  ---
+  duration_ms: 51.108709
+  type: 'test'
+  ...
+# Subtest: audit: chain verifies, and any edit, deletion or reorder is detected
+ok 20 - audit: chain verifies, and any edit, deletion or reorder is detected
+  ---
+  duration_ms: 0.769417
+  type: 'test'
+  ...
+# Subtest: rehearsal fence: real project refs and non-loopback hosts are refused
+ok 21 - rehearsal fence: real project refs and non-loopback hosts are refused
+  ---
+  duration_ms: 0.087542
+  type: 'test'
+  ...
+# Subtest: identify: routine candidate fast-forwards; a diverged main, an extra tree path or a migration edit is refused
+ok 22 - identify: routine candidate fast-forwards; a diverged main, an extra tree path or a migration edit is refused
+  ---
+  duration_ms: 658.063667
+  type: 'test'
+  ...
+# Subtest: runbook: names the manifest hash, the approval, and every production step in order
+ok 23 - runbook: names the manifest hash, the approval, and every production step in order
+  ---
+  duration_ms: 0.381916
+  type: 'test'
+  ...
+# Subtest: live evidence path through the CLI: prepare → runbook → record (gated) → check-production
+ok 24 - live evidence path through the CLI: prepare → runbook → record (gated) → check-production
+  ---
+  duration_ms: 880.838958
+  type: 'test'
+  ...
+1..24
+# tests 24
+# suites 0
+# pass 24
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1686.395167
+exit=0

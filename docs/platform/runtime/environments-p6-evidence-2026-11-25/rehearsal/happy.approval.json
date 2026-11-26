@@ -1,0 +1,25 @@
+{
+  "schema": "alloy.release-approval/v1",
+  "environment": "rehearsal",
+  "approver": {
+    "name": "Rehearsal Owner",
+    "role": "owner"
+  },
+  "candidate_sha": "47bff3f548be59fe21073bdb86553e609e5ab4be",
+  "production_before_sha": "60ca79152bfed0232fc38808a0bea5d72949b49f",
+  "manifest_sha256": "b9e2729a81c2e824ad977204eedb146b651211a396d575019cc09701f73c45c2",
+  "staging_verification_sha256": "80eeb88a0ec3d5b6e7d977877519fbdf047e1f50744fbbe38e0ef18f5104160c",
+  "pending_migrations": [
+    "20270201000000",
+    "20270201000100"
+  ],
+  "scope": [
+    "snapshot",
+    "schema_expand",
+    "code_deploy",
+    "code_rollback"
+  ],
+  "approved_at": "2026-11-26T01:27:14.845Z",
+  "expires_at": "2026-11-26T05:27:14.845Z",
+  "statement": "I approve releasing 47bff3f548be59fe21073bdb86553e609e5ab4be to rehearsal, replacing 60ca79152bfed0232fc38808a0bea5d72949b49f, with 2 migration(s)."
+}

@@ -281,6 +281,7 @@ Its QA profile — the three managed QA identities, required runtime settings an
 
 ## Related
 
+- [`production-release-procedure.md`](production-release-procedure.md) — the routine staging-to-production release (proposed)
 - `api-contracts.md`
 - `docs/audits/supabase-schema-alignment-audit.md`
 - Root `README.md` for clone/setup

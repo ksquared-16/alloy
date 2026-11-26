@@ -1,0 +1,12 @@
+{
+  "identify_failures": [],
+  "production_ledger": "unknown",
+  "status": "blocked",
+  "blockers": [
+    "production_ledger_unknown: read production's supabase_migrations.schema_migrations first (read-only)"
+  ],
+  "warnings_count": 0,
+  "ledger_head": null,
+  "pending_count": 0,
+  "contract_files": []
+}
