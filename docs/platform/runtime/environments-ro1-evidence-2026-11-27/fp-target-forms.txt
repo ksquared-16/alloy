@@ -1,0 +1,20 @@
+# fp_target, exactly as renderFirstPromotionRunbook prints it for new ref tjziptdknxdajzauctha (placeholder passwords, <pw>)
+fp_target () { case "$1" in *:6543*) echo "refused: transaction pooler (6543)"; return 1 ;; esac; case "$1" in *vslwnntzzgpnmrpjipat*) echo "refused: names the previous project"; return 1 ;; *tjziptdknxdajzauctha*) return 0 ;; esac; echo "refused: does not name the new project tjziptdknxdajzauctha"; return 1 } 
+## the forms the operator session uses
+postgresql://postgres.tjziptdknxdajzauctha:<pw>@aws-0-us-west-2.pooler.supabase.com:5432/postgres            rc=0 accepted
+postgresql://alloy_readonly.tjziptdknxdajzauctha:<pw>@aws-0-us-west-2.pooler.supabase.com:5432/postgres      rc=0 accepted
+## the direct host (IPv6-only without the IPv4 add-on)
+postgresql://postgres:<pw>@db.tjziptdknxdajzauctha.supabase.co:5432/postgres                                 rc=0 accepted
+postgresql://alloy_readonly:<pw>@db.tjziptdknxdajzauctha.supabase.co:5432/postgres                           rc=0 accepted
+## refused
+postgresql://postgres.tjziptdknxdajzauctha:<pw>@aws-0-us-west-2.pooler.supabase.com:6543/postgres            rc=1 refused: transaction pooler (6543)
+postgresql://postgres.vslwnntzzgpnmrpjipat:<pw>@aws-0-us-west-2.pooler.supabase.com:5432/postgres            rc=1 refused: names the previous project
+postgresql://postgres.ikaxilmwmrmbagoidedu:<pw>@aws-0-us-west-2.pooler.supabase.com:5432/postgres            rc=1 refused: does not name the new project tjziptdknxdajzauctha
+## edge cases the guard does not check (accepted; see the README)
+postgresql://postgres.tjziptdknxdajzauctha:<pw>@aws-0-us-west-2.pooler.supabase.com:5433/postgres            rc=0 accepted
+postgresql://postgres.tjziptdknxdajzauctha:<pw>@aws-0-us-west-2.pooler.supabase.com/postgres                 rc=0 accepted
+
+# tenant:config:export's staging guard (web/lib/staging/fireflyStagingSeed/targets.ts resolveSeedTarget), --target staging
+postgresql://alloy_readonly.ikaxilmwmrmbagoidedu:<pw>@aws-0-us-west-2.pooler.supabase.com:5432/postgres  accepted (target staging, ref ikaxilmwmrmbagoidedu)
+postgresql://alloy_readonly:<pw>@db.ikaxilmwmrmbagoidedu.supabase.co:5432/postgres                       accepted (target staging, ref ikaxilmwmrmbagoidedu)
+postgresql://alloy_readonly.tjziptdknxdajzauctha:<pw>@aws-0-us-west-2.pooler.supabase.com:5432/postgres  refused (wrong_project)

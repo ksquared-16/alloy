@@ -1,0 +1,40 @@
+BEGIN
+DO
+ALTER ROLE
+ALTER ROLE
+ALTER ROLE
+ALTER ROLE
+ALTER ROLE
+ALTER ROLE
+GRANT
+GRANT
+ALTER DEFAULT PRIVILEGES
+CREATE SCHEMA
+psql:<stdin>:83: NOTICE:  schema "supabase_migrations" already exists, skipping
+GRANT
+GRANT
+ALTER DEFAULT PRIVILEGES
+DO
+REVOKE
+REVOKE
+REVOKE
+REVOKE
+REVOKE
+ALTER DEFAULT PRIVILEGES
+ALTER DEFAULT PRIVILEGES
+ALTER DEFAULT PRIVILEGES
+COMMIT
+               check_name                |                                                                                                       result                                                                                                       
+-----------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ role attributes                         | ok
+ session settings                        | ok
+ member of no role                       | ok
+ public tables readable                  | ok (337 tables and views)
+ no write privilege granted to the role  | ok
+ no CREATE on any schema or the database | ok
+ ledger                                  | ok
+ storage.buckets                         | ok
+ default privileges for future tables    | ok
+ reachable through PUBLIC (note)         | note: Supabase grants these to every role and this script cannot take them away from one role; refused while the session is read-only: writes on net._http_response, net.http_request_queue; temporary tables: yes
+(10 rows)
+

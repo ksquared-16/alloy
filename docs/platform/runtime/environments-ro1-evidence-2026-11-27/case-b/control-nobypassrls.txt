@@ -1,0 +1,18 @@
+# ro1_control_nobypassrls_42937: the same SELECT grants as ro1_readonly_42937, NOBYPASSRLS, no policy names it. postgres reads orgs=2
+## rolbypassrls: ro1_readonly_42937 ro1_control_nobypassrls_42937
+t f
+## row_security on (the default): orgs
+## row_security on: count(*) public.orgs, public.locations
+orgs 0
+locations 0
+## row_security on: export
+{"org" : null, "locations" : [], "role_types" : [], "departments" : [], "work_units" : []}
+## row_security = off (the role script's setting): count(*) public.orgs
+ERROR:  query would be affected by row-level security policy for table "orgs"
+rc=1
+## row_security = off: orgs
+psql:<stdin>:1: ERROR:  query would be affected by row-level security policy for table "orgs"
+rc=3
+## row_security = off: export
+psql:<stdin>:26: ERROR:  query would be affected by row-level security policy for table "orgs"
+rc=3

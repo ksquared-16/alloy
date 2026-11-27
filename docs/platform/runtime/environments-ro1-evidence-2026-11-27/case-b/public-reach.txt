@@ -1,0 +1,31 @@
+# ro1_readonly_42937 (the role script's role, test name) with read-only deliberately turned off: what PUBLIC (Supabase's grants to every role) still reaches
+## lo_create
+SET
+large object 1293478
+## net.http_get
+SET
+queued request 1
+## insert net.http_request_queue
+SET
+row 2
+INSERT 0 1
+## the queued requests, as postgres (pg_net's worker serves only the database postgres, so none is sent from here)
+still queued: 2
+## temp table
+SET
+CREATE TABLE
+INSERT 0 1
+temp rows 1
+## temp table after the session ends (as postgres)
+ro1_t tables left: 0
+## its own session defaults (Postgres lets every role change its own)
+SET
+ALTER ROLE
+own default changed
+## the role script's check row 2, read as postgres
+session settings|WRONG: {default_transaction_read_only=off,statement_timeout=120s,lock_timeout=5s,idle_in_transaction_session_timeout=60s,row_security=off}
+## the role script run again restores it
+session settings|ok
+## public tables and data, as postgres
+orgs 2
+public tables 334

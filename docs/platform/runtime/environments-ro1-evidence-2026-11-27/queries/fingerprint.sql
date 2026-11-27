@@ -1,0 +1,6 @@
+select 'columns_md5|' || md5(coalesce(string_agg(table_name||'.'||column_name||':'||data_type||':'||is_nullable||':'||coalesce(column_default,''), ',' order by table_name, ordinal_position),'')) from information_schema.columns where table_schema='public'
+union all select 'policies_md5|' || md5(coalesce(string_agg(tablename||'.'||policyname||':'||cmd||':'||array_to_string(roles,'+')||':'||coalesce(qual,'')||':'||coalesce(with_check,''), ',' order by tablename, policyname),'')) from pg_policies where schemaname='public'
+union all select 'functions_md5|' || md5(coalesce(string_agg(p.proname||'('||pg_get_function_identity_arguments(p.oid)||')', ',' order by p.proname, pg_get_function_identity_arguments(p.oid)),'')) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public'
+union all select 'indexes_md5|' || md5(coalesce(string_agg(indexdef, ',' order by indexname),'')) from pg_indexes where schemaname='public'
+union all select 'tables|' || count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r'
+union all select 'rls_disabled|' || count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r' and not c.relrowsecurity;

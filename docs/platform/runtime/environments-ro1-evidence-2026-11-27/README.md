@@ -1,0 +1,205 @@
+---
+owner: runtime
+status: proposed
+last_reviewed: 2026-11-26
+supersedes: []
+status_note: Evidence index for slice RO1 of objective WALDEN_ENVIRONMENTS_AND_PROMOTION_B9E42B66 (the read-only role `alloy_readonly` for the new project and staging, proven locally). Not doctrine. Nothing here touched a hosted project.
+---
+
+# RO1 evidence: the read-only role, proven locally (step 5, M7)
+
+Slice RO1 of the ALY-14 first promotion. The script the owner runs is
+[`../environments-readonly-role-2026-11-27.sql`](../environments-readonly-role-2026-11-27.sql). It runs on both projects:
+the new project `tjziptdknxdajzauctha` (`PRODUCTION_DB_URL_READONLY`) and staging `ikaxilmwmrmbagoidedu`
+(`STAGING_DB_URL_READONLY`). The owner's steps are in the
+[owner guide](../environments-owner-dashboard-guide-2026-11-26.md), step 5.
+
+**Proven only locally.** The tests ran on the one shared local stack, `alloy-cert`
+([local Docker containment](../../governance/local-docker-containment.md)). The harness joins it with `alloy-stack use`,
+starts no container of its own, and releases its lease at the end. The stack's database is `supabase/postgres:17.6.1.165`
+(PostgreSQL 17.6, the image recorded for staging and the old production): major 17, the same as the hosted projects
+(`run.txt`, line 6). No hosted project, credential or supabase CLI was used. The exact image of the new project was not
+observed: the script's own check table (below) is the proof on each hosted project.
+
+Each case is a throwaway database inside that stack, `ro1_case_a_<pid>` and `ro1_case_b_<pid>`, created by `postgres`.
+It gets the platform a hosted project's database has before any Alloy migration, in three steps:
+[`platform/1-before-gotrue-storage.sql`](platform/1-before-gotrue-storage.sql); GoTrue's and Storage's own migrations,
+run by the stack's own auth and storage containers against that database; then
+[`platform/2-after-gotrue-storage.sql`](platform/2-after-gotrue-storage.sql). None of it is cluster-wide.
+
+- **pg_cron is a stand-in.** pg_cron can only be created in the database named by `cron.database_name`, which is
+  `postgres` on the stack. So [`platform/3-pg_cron-stand-in.sql`](platform/3-pg_cron-stand-in.sql) provides `cron.job`,
+  `cron.schedule` and `cron.unschedule`, and `20261002120000_scheduled_work_clock_pg_cron.sql` is applied with its one
+  `create extension if not exists pg_cron;` line made a no-op. Every other file is applied as committed. As a result,
+  the census reads `extension:pg_cron|missing` in both cases. The fingerprint is byte-for-byte the same as the earlier
+  run, which used its own containers (`ac485ca01f55`).
+- **The role runs under a test name.** Roles are cluster-wide, so the role script runs as `ro1_readonly_<pid>`. The
+  harness swaps that name for `alloy_readonly` in a copy of the committed script, and checks that reversing the swap
+  gives the committed file byte for byte. The committed script still creates `alloy_readonly`. In the case folders, the
+  `*.alloy_readonly.txt` files are that role's output.
+- **Case B starts clean.** Case A's database and role are dropped before case B, so case B's first run creates the role.
+- **Teardown, also on failure.** In each case database the harness runs `drop owned by` for the test roles (their grants
+  and default-privilege entries). It then drops the databases and the roles. It shows with `\du` and `\ddp` that none
+  remains, and that the cluster's roles, memberships and role settings are unchanged (`run.txt`, the teardown proof).
+  If the stack was already up when the harness joined, it releases its lease with `--keep-running`. The stack is not
+  the harness's to stop.
+
+Re-run, from the worktree root: `bash docs/platform/runtime/environments-ro1-evidence-2026-11-27/ro1-readonly-role-check.sh
+docs/platform/runtime/environments-ro1-evidence-2026-11-27` (about 1 minute on a running stack, plus the stack's start
+if it is down). Transcript: [`run.txt`](run.txt).
+
+## 1. What read-only access needs
+
+Every query run against a READONLY URL in the [briefing](../environments-p1s-first-promotion-briefing-2026-11-25.md) §4.1
+and §5.6.1, the [plan](../environments-final-cutover-plan-2026-11-26.md) §2, and the runbook that `release runbook`
+prints (`scripts/release/alloy-release.mjs`). The SQL is what the tools emit, saved in [`queries/`](queries/)
+(`SHA256SUMS`).
+
+| Read | Run at | URL | Reads |
+|---|---|---|---|
+| `emit-sql ledger` | 7 (staging); runbook *census*, *after* (15) | both | `supabase_migrations.schema_migrations` |
+| `emit-sql ledger-if-present` | 7, runbook *before*, *pre-chain* (9) | new project | `to_regclass(...)`, then the ledger as above. The table does not exist before step 9 |
+| `emit-sql fingerprint` | 7 (both), runbook *census*, *after* | both | `information_schema.columns` (public), `pg_policies`, `pg_proc`/`pg_namespace`, `pg_indexes`, `pg_class` |
+| `emit-sql census` | runbook *census* (9), 15b, 16.6, 16.R | new project | `pg_extension`; `storage.buckets` (through `query_to_xml`); `public.scheduled_work`; `count(*)` of **every** public base table (`information_schema.tables`) |
+| `emit-sql orgs` | 7 (staging), runbook observations, 16.6, 16.R | both | `public.orgs` |
+| `tenant:config:export` | 6 | staging | `public.orgs`, `public.locations`, `public.customer_person_role_types`, `public.departments`, `public.work_units` (`EXPORT_READ_TABLES`) |
+| routine `renderRunbook` observations | later releases | production | the same `ledger`, `fingerprint` and `orgs` SQL, inline |
+
+So the role needs `USAGE` and `SELECT` on: every table and view in `public`; `supabase_migrations` and its ledger
+table; and `storage.buckets`. The catalog views need nothing extra.
+
+**Two traps the grants avoid.**
+
+- `information_schema.columns` and `information_schema.tables` list only tables the caller has a privilege on. With
+  SELECT on some tables, the fingerprint's `columns_md5` and the census's row list would silently differ from
+  `postgres`'s. The role reads every public table and view.
+- `ledger-if-present` returns nothing both when there is no ledger and when the role cannot see it. Without access, the
+  release tool would read a full ledger as **empty**. So the script creates `supabase_migrations` (empty, the same
+  `create schema if not exists` as `emit-sql ledger-table`) and sets its default privileges before step 9 creates the
+  table.
+
+Step 14's clock reads (`scheduled_work_clock`, `net._http_response`, `cron.job_run_details`) name no URL in the plan.
+`scheduled_work_clock` is in `public`, so it is covered. The `cron` schema is not granted.
+
+**BYPASSRLS, by owner exception (2026-11-26; plan O-READONLY).** The Database Engineer's review of RO1 found that the
+role had BYPASSRLS, which the role check forbids unless the owner accepts it: a login with BYPASSRLS reads every
+tenant's rows, customer data included. On 2026-11-26 the owner accepted it explicitly, in the Henry thread:
+
+- **Who:** the owner, 2026-11-26. This replaces Henry's earlier automatic choice of `postgres` in a read-only session,
+  which is not used.
+- **What it allows:** the dedicated login `alloy_readonly` reads **every tenant's rows** on the projects it is created
+  on, so the census counts, the orgs list and the step-6 export run through it, the same as `postgres` reads them.
+- **What it never allows:** any write (section 2: every write is refused by privilege, whatever the session's
+  read-only and `row_security` settings), DDL, or a writing function. Its password is held only in the owner's secret
+  store.
+- **Follow-up:** on production, switch the role off (`NOLOGIN`) or narrow it (`NOBYPASSRLS`) **before the first tenant
+  with live customer data (families, attendance or billing) goes live**.
+
+The script names BYPASSRLS and keeps `row_security = off` on the role's sessions. Every public table has RLS on
+(`rls_disabled|0`) and no policy names the role, so:
+
+- every read (`ledger`, `ledger-if-present`, `fingerprint`, `census`, `orgs`, the export) is byte-for-byte equal to
+  `postgres`'s, exit 0;
+- if BYPASSRLS were ever missing, the reads of tenant rows fail **loudly**. The control shows it
+  (`case-*/control-nobypassrls.txt`): a role with the same SELECT grants and NOBYPASSRLS reads 0 orgs, 0 locations and
+  an export with `"org": null`, with no error, while `row_security` is on; with `row_security = off`, the role's own
+  setting, all three reads stop with `ERROR: query would be affected by row-level security policy for table "orgs"`
+  and a non-zero exit. No count or export is ever quietly wrong.
+
+Do not add policies for the role: new policies change `policies_md5`, and the fingerprint would no longer equal
+staging's. Nothing in the release tool was changed here.
+
+## 2. Results (both cases, 88 checks, 0 failed)
+
+| | Case A: new project (empty; script, then the chain) | Case B: staging (chain applied; script after it, twice) |
+|---|---|---|
+| Role script, as `postgres` | 9 of 9 checks `ok` (`case-a/role-script-on-empty.txt`) | 9 of 9 `ok`, and the same on the second run (`case-b/role-script-*.txt`) |
+| Chain, as `postgres` | 558 files, ledger 558, head `20261223090000`; the script was **not** run again: its check table, re-read, is 9 of 9 `ok` (`checks-after-chain.txt`) | 558 files, head `20261223090000`, before the script |
+| Step 7 reads before the chain | `ledger-if-present` empty and fingerprint `tables\|0`, equal to `postgres`'s | — |
+| `ledger`, `ledger-if-present` (558 lines), `fingerprint` | each **byte-for-byte equal** to `postgres`'s, exit 0 | each byte-for-byte equal, exit 0 |
+| `census` (30 lines), `orgs` (2 lines), export | each **byte-for-byte equal** to `postgres`'s, exit 0 | each byte-for-byte equal, exit 0 |
+| Control: same grants, NOBYPASSRLS (`control-nobypassrls.txt`) | `rolbypassrls` role `t`, control `f`. `row_security` on: 0 orgs, 0 locations, export `"org" : null`, no error. `row_security = off`: 3 of 3 reads refused by RLS, non-zero exits | the same |
+| Refusals (`refusals.txt`) | 35 refused, 0 allowed; `postgres`'s census unchanged | 35 refused, 0 allowed; census unchanged |
+
+The export ran as `tenant:config:export` runs it (`PGOPTIONS=-c default_transaction_read_only=on`, `-q -A -t -v org_id=…`).
+A local org row (`93667019-…`, one site) stands in for Firefly's.
+
+**Refused, as `alloy_readonly`** (one session each; each "read-only off" test runs
+`SET default_transaction_read_only = off` as its own statement first):
+
+- Writes in the default session: INSERT, UPDATE, DELETE and TRUNCATE on `orgs` and `locations` are refused by the
+  read-only transaction.
+- Read-only off, then a write: refused by **privilege**, `permission denied for table …`, on `orgs`, `locations`,
+  `storage.buckets` and the ledger. BYPASSRLS lets the role read past row-level security; it grants no write.
+- Read-only off **and** `row_security` back on, then a write: refused by privilege, the same, for INSERT, UPDATE and
+  DELETE on `orgs` and `locations` and an UPDATE on `storage.buckets`. The privilege wall holds on its own, whatever the
+  session's settings. `BEGIN READ WRITE` is refused too. Public has no sequence on this chain, so `nextval` is skipped.
+- DDL with read-only off: CREATE TABLE and CREATE FUNCTION in public get `permission denied for schema public`. CREATE
+  SCHEMA gets `permission denied for database …` (the case database; on a hosted project, `postgres`). ALTER TABLE, DROP TABLE and CREATE INDEX get
+  `must be owner of table …`.
+- The owner's step-5 check (guide, step 5, item 4), exactly: `create table supabase_migrations.ro_check` is refused by
+  the read-only transaction, and with read-only off by `permission denied for schema supabase_migrations`.
+- Widening itself: `SET ROLE postgres` is refused, and so is `ALTER ROLE` in the default session.
+- Writing SECURITY DEFINER functions (owned by `postgres`), with read-only on or off: `consume_rate_limit`,
+  `document_configuration_seed` and `certification_reset_execute` get `permission denied for function …`. The
+  migrations keep every writing SECURITY DEFINER function in public closed to PUBLIC. Of the 128 SECURITY DEFINER
+  functions there, the 10 that PUBLIC can execute are 8 trigger functions and 2 stable reads. A direct call to a
+  trigger function is refused: `trigger functions can only be called as triggers`.
+
+## 3. Known limit: what PUBLIC still reaches (measured)
+
+**Known limit, open for the owner (a separate decision; recommendation: accept as is).** The first RO1 run found it, and
+it is unchanged by BYPASSRLS. With read-only **deliberately** switched off, the role can still use what Supabase grants
+every role: large objects, temporary tables and pg_net's request queue. It cannot touch an app table, the ledger or
+Storage.
+
+Postgres and Supabase grant some things to every role (PUBLIC). This script cannot take them away from one role, and
+`postgres` cannot revoke Supabase's own grants. **In the role's default read-only session every one of them is
+refused.** A session that **deliberately** turns read-only off can do the following (`case-*/public-reach.txt`; in each
+case 5 of 5 succeeded):
+
+1. `lo_create(0)`: it creates a large object.
+2. `net.http_get(...)`: it queues an outbound HTTP request through pg_net. Here nothing is sent: pg_net's worker serves
+   only the stack's `postgres` database, and both requests are still queued when the case ends (`still queued: 2`). On a
+   hosted project, the request would leave.
+3. INSERT into `net.http_request_queue` and `net._http_response` (PUBLIC has all privileges on them).
+4. A temporary table. It lasts only for that session; none was left afterwards.
+5. `ALTER ROLE alloy_readonly SET default_transaction_read_only = off`. Postgres lets every role change its own defaults.
+   The script's check row 2 then says `WRONG`, and running the script again restores it (`ok`).
+
+None of these writes to a public table, the ledger or Storage, and none can call a writing function. They are why the
+URL is a secret held only in the owner's secret store, and why no read in the plan or the runbook sets
+`default_transaction_read_only` (only the owner's step-5 check does, to show the privilege refusal).
+
+## 4. Connection strings and `fp_target`
+
+[`fp-target-forms.txt`](fp-target-forms.txt) runs the runbook's `fp_target` exactly as `renderFirstPromotionRunbook`
+prints it for `tjziptdknxdajzauctha`, and the export's staging guard, against each form (placeholder passwords).
+
+| Variable | Form (session pooler, port 5432) |
+|---|---|
+| `PRODUCTION_DB_URL` | `postgresql://postgres.tjziptdknxdajzauctha:<password>@<pooler-host>:5432/postgres` |
+| `PRODUCTION_DB_URL_READONLY` | `postgresql://alloy_readonly.tjziptdknxdajzauctha:<password>@<pooler-host>:5432/postgres` |
+| `STAGING_DB_URL_READONLY` | `postgresql://alloy_readonly.ikaxilmwmrmbagoidedu:<password>@<staging-pooler-host>:5432/postgres` |
+
+`<pooler-host>` is the one the project's **Connect** panel shows under *Session pooler*. For the new project it is in
+`us-west-2` (for example `aws-0-us-west-2.pooler.supabase.com`). Staging's region was not observed here, so its host is
+copied from staging's own panel. The direct host `db.<ref>.supabase.co:5432` is IPv6-only without the IPv4 add-on, and
+the transaction pooler (6543) is refused.
+
+- **`fp_target` already accepts the session-pooler form** (and the direct form) for the new ref. It refuses 6543, the
+  previous ref, and staging's ref. **No change was made.**
+- **What `fp_target` does not check:** it refuses only `:6543`. It accepts any other port (`:5433` was accepted) and a
+  URL with no port, and it matches the ref anywhere in the string. The plan's wording "accepts only the new ref on port
+  5432" overstates it: the plan now says what it does. Tightening it is left over (not part of this slice).
+- `tenant:config:export --target staging` accepts `alloy_readonly.ikaxilmwmrmbagoidedu` on the pooler and the direct
+  host, and refuses the new ref (`wrong_project`).
+
+## Files
+
+- `ro1-readonly-role-check.sh`: the harness. `run.txt`: its transcript, with the teardown proof.
+- `platform/`: a case database's platform, before any Alloy migration, and the pg_cron stand-in.
+- `queries/`: the exact SQL of each read, with `SHA256SUMS`.
+- `case-a/`, `case-b/`: the role script's output, the chain log, each read as `postgres` and as `alloy_readonly`,
+  `control-nobypassrls.txt`, `refusals.txt` and `public-reach.txt`.
+- `fp-target-forms.txt`: the connection-string forms against `fp_target` and the export's guard.

@@ -114,16 +114,30 @@ test("the final cutover plan: no credential, the owner's window, every step and 
     assert.doesNotMatch(text, /no calendar date is fixed|booked at (step )?6b|date is booked/i, "O-WHEN: the date is decided, not booked at 6b");
     const statusNote = text.match(/^status_note: (.*)$/m)?.[1] ?? "";
     for (const d of ["Tue Dec 1, 09:00–12:00 PT", "Sun Nov 29", "Tue Dec 8, 09:00–12:00 PT"]) assert.ok(statusNote.includes(d), `status_note states ${d}`);
-    for (const o of ["O-PITR", "O-ADMIN", "O-WHEN", "D12", "O-LANES", "O-ROOMS"]) assert.match(text, new RegExp(`^\\| \\*\\*${o}\\*\\* \\|`, "m"), o);
-    // D12: a named human operator, not the Developer, types step 16 while the owner watches; the transcript is recorded.
-    assert.ok(text.includes("<operator-name>"), "D12: the operator stays a placeholder until the owner names them");
-    assert.doesNotMatch(text, /<STEP16_OPERATOR>|\*\*Operator\*\*: the Developer/, "D12: the operator is not the Developer");
-    assert.match(text, /^\| \*\*D12\*\* \|[^\n]*owner watches[^\n]*transcript is recorded/m, "D12 names who watches and the transcript");
-    assert.match(text, /^\| 2:25 \| \*\*16\*\* \| Operator `<operator-name>` \(D12\)/m, "step 16 is the named operator's");
-    assert.ok(text.includes("**Name the operator**"), "naming the operator is an owner open item");
-    // O-PITR and O-ADMIN are decided, not open.
-    assert.match(text, /^\| \*\*5\*\* \|[^\n]*enable PITR with 7-day retention/m, "step 5 enables 7-day PITR");
-    assert.ok(text.includes("(a paid add-on), enabled on the new project **before the window**"), "PITR is a paid add-on, before the window");
+    for (const o of ["O-BACKUPS", "O-ADMIN", "O-WHEN", "D11", "D12", "O-LANES", "O-ROOMS"]) assert.match(text, new RegExp(`^\\| \\*\\*${o}\\*\\* \\|`, "m"), o);
+    // D11/D12 (owner, 2026-11-26): Claude Code is the operator in the owner's session; the owner approves each command,
+    // pastes secrets at a hidden prompt, never types commands, and does every dashboard step from the owner guide.
+    assert.doesNotMatch(text, /<operator-name>|\*\*Name the operator\*\*/, "D12: the operator is decided, not a placeholder");
+    assert.match(text, /^\| \*\*D12\*\* \|[^\n]*The operator is Claude Code\*\*, running in the owner's own operator session on the Mac mini[^\n]*approves each command before it runs[^\n]*transcript is recorded/m, "D12 names the operator, the approval and the transcript");
+    assert.match(text, /^\| \*\*D11\*\* \|[^\n]*The owner never types commands[^\n]*hidden prompt \(`read -rs`\)[^\n]*Database Engineer's review/m, "D11: no typed commands, the hidden prompt, the Database Engineer's review");
+    assert.match(text, /^\| 2:25 \| \*\*16\*\* \| Operator: Claude Code \(D12\), each command only after the owner approves it \(D11\)/m, "step 16 is Claude Code's, per approved command");
+    for (const rule of ["**The per-command approval rule (D11, D12).**", "**The secret-entry rule (D11).**"]) assert.ok(text.includes(rule), rule);
+    assert.ok(text.includes("never written to a file, never typed or pasted into a command line, and\nnever shown to Claude"), "the secret-entry rule");
+    assert.ok(text.includes("environments-owner-dashboard-guide-2026-11-26.md"), "the plan names the owner dashboard guide");
+    // O-BACKUPS (owner, 2026-11-26, replacing O-PITR) and O-ADMIN are decided, not open: daily backups kept 7 days, no
+    // PITR until the first tenant with live customer data; a restore can lose up to a day.
+    assert.match(text, /^\| \*\*O-BACKUPS\*\* \|[^\n]*daily backups, kept 7 days[^\n]*No point-in-time recovery[^\n]*can lose up to a day[^\n]*before the first tenant with live customer data/m, "O-BACKUPS: daily, 7 days, no PITR, the follow-up");
+    // O-READONLY (owner, 2026-11-26): alloy_readonly keeps BYPASSRLS by explicit exception, never writes, and is switched
+    // off or narrowed on production before the first tenant with live customer data. The step-5 decision is closed.
+    assert.match(text, /^\| \*\*O-READONLY\*\* \|[^\n]*BYPASSRLS[^\n]*every tenant's rows[^\n]*never allows:\*\* a write[^\n]*owner's secret store[^\n]*before the first tenant with live customer data/m, "O-READONLY: who, what it allows, what it never allows, the follow-up");
+    assert.doesNotMatch(text, /Open, owner decision before step 6/, "the step-5 read-path decision is closed");
+    const roleSql = readFileSync(join(REPO_ROOT, "docs/platform/runtime/environments-readonly-role-2026-11-27.sql"), "utf8");
+    assert.match(roleSql, /^alter role alloy_readonly with login [^\n]* bypassrls connection limit 5;$/m, "the role script gives BYPASSRLS");
+    assert.ok(roleSql.includes("alter role alloy_readonly set row_security = off;"), "row_security stays off: a missing BYPASSRLS fails loudly");
+    assert.match(roleSql, /and not r\.rolreplication and r\.rolbypassrls and r\.rolconnlimit = 5/, "check row 1 requires BYPASSRLS");
+    const step5 = text.match(/^\| \*\*5\*\* \|[^\n]*$/m)?.[0] ?? "";
+    for (const p of ["daily backups, kept 7 days (O-BACKUPS)", "**`tjziptdknxdajzauctha`**", "**`us-west-2`**", "**Resend**", "environments-readonly-role-2026-11-27.sql", "`previous_supabase_project_ref` `vslwnntzzgpnmrpjipat`"]) assert.ok(step5.includes(p), `step 5: ${p}`);
+    assert.doesNotMatch(text, /enable PITR|7-day PITR restore|with PITR again|paid add-on/, "no PITR step, PITR restore or add-on is left");
     assert.doesNotMatch(text, /name Firefly's first admin|choose its backup/i, "neither the first admin nor the backup tier is still open");
     for (const p of ["<admin-user-id>", "<admin-email>", "owner's own existing Auth account", "invites Firefly's staff"]) assert.ok(text.includes(p), p);
     assert.ok(text.includes("17 later rooms") && text.includes("Work Unit Queue"), "rooms at the export review; lanes after step 16");
@@ -143,7 +157,12 @@ test("the final cutover plan: no credential, the owner's window, every step and 
     const briefing = readFileSync(join(REPO_ROOT, BRIEFING), "utf8");
     assert.doesNotMatch(briefing, /--baseline "\$DIR\/census-extras\.txt"/, "the briefing no longer verifies step 16 against step 9's census");
     assert.ok(briefing.includes("environments-final-cutover-plan-2026-11-26.md"), "the briefing names the final plan");
-    assert.match(briefing, /^\| \*\*M7\*\* \|[^\n]*PITR with 7 days retention \(a paid add-on\), enabled on the new project before the window/m, "briefing M7: PITR decided");
+    assert.match(briefing, /^\| \*\*M7\*\* \|[^\n]*daily backups, kept 7 days, no PITR[^\n]*before the first tenant with live customer data/m, "briefing M7: daily backups decided, PITR later");
+    assert.doesNotMatch(briefing, /7-day PITR \(step 5\)|enable PITR/, "the briefing no longer relies on PITR");
+    const guide = readFileSync(join(REPO_ROOT, "docs/platform/runtime/environments-owner-dashboard-guide-2026-11-26.md"), "utf8");
+    for (const [name, re] of CREDENTIAL_SHAPES) assert.doesNotMatch(guide, re, `guide: ${name}`);
+    assert.doesNotMatch(guide, /Turn on point-in-time recovery|does not hold that statement yet/, "the guide has no PITR step and holds the role statement");
+    for (const p of ["environments-readonly-role-2026-11-27.sql", "Database → Roles", "Reset password", "never** in the SQL Editor", "alloy_readonly.tjziptdknxdajzauctha", "permission denied for schema supabase_migrations", "Your exception (2026-11-26, plan O-READONLY)", "**Known limit", "select count(*) from public.orgs"]) assert.ok(guide.includes(p), `guide: ${p}`);
     assert.doesNotMatch(briefing, /backup\/PITR tier|name Firefly's first admin|the owner named at step 6/, "the briefing no longer holds the tier or the first admin open");
 });
 

@@ -1,0 +1,81 @@
+# as ro1_readonly_42937, the role script's role under its test name
+## writes, in the role's default read-only session
+REFUSED  insert public.orgs                                         rc=1  ERROR:  cannot execute INSERT in a read-only transaction
+         sql: insert into public.orgs (name, slug) values ('ro1', 'ro1')
+REFUSED  update public.orgs                                         rc=1  ERROR:  cannot execute UPDATE in a read-only transaction
+         sql: update public.orgs set name = name
+REFUSED  delete public.locations                                    rc=1  ERROR:  cannot execute DELETE in a read-only transaction
+         sql: delete from public.locations
+REFUSED  truncate public.locations                                  rc=1  ERROR:  cannot execute TRUNCATE TABLE in a read-only transaction
+         sql: truncate public.locations
+## read-only turned off, then a write (refused by privilege, not by the setting)
+REFUSED  SET read_only off; insert public.orgs                      rc=1  ERROR:  permission denied for table orgs
+         sql: set default_transaction_read_only = off; -- then, as its own statement: insert into public.orgs (name, slug) values ('ro1', 'ro1')
+REFUSED  SET read_only off; update public.orgs                      rc=1  ERROR:  permission denied for table orgs
+         sql: set default_transaction_read_only = off; -- then, as its own statement: update public.orgs set name = name
+REFUSED  SET read_only off; delete public.locations                 rc=1  ERROR:  permission denied for table locations
+         sql: set default_transaction_read_only = off; -- then, as its own statement: delete from public.locations
+REFUSED  SET read_only off; truncate public.locations               rc=1  ERROR:  permission denied for table locations
+         sql: set default_transaction_read_only = off; -- then, as its own statement: truncate public.locations
+## read-only off AND row_security back on, then a write (the privilege check, whatever the RLS setting)
+REFUSED  read_only off, row_security on; insert public.orgs         rc=1  ERROR:  permission denied for table orgs
+         sql: set default_transaction_read_only = off; set row_security = on; -- each its own statement, then: insert into public.orgs (name, slug) values ('ro1', 'ro1')
+REFUSED  read_only off, row_security on; update public.orgs         rc=1  ERROR:  permission denied for table orgs
+         sql: set default_transaction_read_only = off; set row_security = on; -- each its own statement, then: update public.orgs set name = name
+REFUSED  read_only off, row_security on; delete public.locations    rc=1  ERROR:  permission denied for table locations
+         sql: set default_transaction_read_only = off; set row_security = on; -- each its own statement, then: delete from public.locations
+REFUSED  read_only off, row_security on; update storage.buckets     rc=1  ERROR:  permission denied for table buckets
+         sql: set default_transaction_read_only = off; set row_security = on; -- each its own statement, then: update storage.buckets set public = true
+REFUSED  BEGIN READ WRITE; update public.orgs                       rc=1  ERROR:  permission denied for table orgs
+         sql: begin read write; update public.orgs set name = name; commit
+REFUSED  SET read_only off; delete the ledger                       rc=1  ERROR:  permission denied for table schema_migrations
+         sql: set default_transaction_read_only = off; -- then, as its own statement: delete from supabase_migrations.schema_migrations
+REFUSED  SET read_only off; update storage.buckets                  rc=1  ERROR:  permission denied for table buckets
+         sql: set default_transaction_read_only = off; -- then, as its own statement: update storage.buckets set public = true
+SKIPPED  nextval: public has no sequence on this database
+## DDL
+REFUSED  create table public.ro1_x                                  rc=1  ERROR:  cannot execute CREATE TABLE in a read-only transaction
+         sql: create table public.ro1_x (i int)
+REFUSED  SET read_only off; create table public.ro1_x               rc=1  ERROR:  permission denied for schema public
+         sql: set default_transaction_read_only = off; -- then, as its own statement: create table public.ro1_x (i int)
+REFUSED  SET read_only off; create schema ro1_x                     rc=1  ERROR:  permission denied for database ro1_case_b_42937
+         sql: set default_transaction_read_only = off; -- then, as its own statement: create schema ro1_x
+REFUSED  SET read_only off; alter table public.orgs add column      rc=1  ERROR:  must be owner of table orgs
+         sql: set default_transaction_read_only = off; -- then, as its own statement: alter table public.orgs add column ro1_x int
+REFUSED  SET read_only off; drop table public.locations             rc=1  ERROR:  must be owner of table locations
+         sql: set default_transaction_read_only = off; -- then, as its own statement: drop table public.locations
+REFUSED  SET read_only off; create function public.ro1_f            rc=1  ERROR:  permission denied for schema public
+         sql: set default_transaction_read_only = off; -- then, as its own statement: create function public.ro1_f() returns int language sql as 'select 1'
+REFUSED  SET read_only off; create index on public.orgs             rc=1  ERROR:  must be owner of table orgs
+         sql: set default_transaction_read_only = off; -- then, as its own statement: create index ro1_ix on public.orgs (name)
+## the owner's step-5 check (owner guide, step 5, item 4), exactly
+REFUSED  owner check 1: create table supabase_migrations.ro_check   rc=1  ERROR:  cannot execute CREATE TABLE in a read-only transaction
+         sql: create table supabase_migrations.ro_check (i int)
+REFUSED  owner check 2: SET read_only off; the same                 rc=1  ERROR:  permission denied for schema supabase_migrations
+         sql: set default_transaction_read_only = off; -- then, as its own statement: create table supabase_migrations.ro_check (i int)
+## the role cannot widen itself
+REFUSED  alter role (self) reset read_only                          rc=1  ERROR:  cannot execute ALTER ROLE in a read-only transaction
+         sql: alter role ro1_readonly_42937 reset default_transaction_read_only
+REFUSED  set role postgres                                          rc=1  ERROR:  permission denied to set role "postgres"
+         sql: set role postgres
+## writing SECURITY DEFINER functions (public; owner postgres)
+REFUSED  consume_rate_limit (writes a counter)                      rc=1  ERROR:  permission denied for function consume_rate_limit
+         sql: select public.consume_rate_limit('ro1', 1, 60)
+REFUSED  SET read_only off; consume_rate_limit                      rc=1  ERROR:  permission denied for function consume_rate_limit
+         sql: set default_transaction_read_only = off; -- then, as its own statement: select public.consume_rate_limit('ro1', 1, 60)
+REFUSED  SET read_only off; document_configuration_seed             rc=1  ERROR:  permission denied for function document_configuration_seed
+         sql: set default_transaction_read_only = off; -- then, as its own statement: select public.document_configuration_seed('93667019-bd28-49b5-a688-acc9bb1e0a19')
+REFUSED  SET read_only off; certification_reset_execute             rc=1  ERROR:  permission denied for function certification_reset_execute
+         sql: set default_transaction_read_only = off; -- then, as its own statement: select public.certification_reset_execute('93667019-bd28-49b5-a688-acc9bb1e0a19', 'x', 'x', '{}'::jsonb)
+REFUSED  SET read_only off; orgs_seed_default_rbac (PUBLIC, trigger) rc=1  ERROR:  trigger functions can only be called as triggers
+         sql: set default_transaction_read_only = off; -- then, as its own statement: select public.orgs_seed_default_rbac()
+## what PUBLIC reaches, in the role's default read-only session
+REFUSED  lo_create                                                  rc=1  ERROR:  cannot execute lo_create() in a read-only transaction
+         sql: select lo_create(0)
+REFUSED  net.http_get                                               rc=1  ERROR:  cannot execute INSERT in a read-only transaction
+         sql: select net.http_get('http://127.0.0.1:9/ro1')
+REFUSED  insert net.http_request_queue                              rc=1  ERROR:  cannot execute INSERT in a read-only transaction
+         sql: insert into net.http_request_queue (method, url, headers, body, timeout_milliseconds) values ('GET', 'http://127.0.0.1:9/ro1', '{}', null, 1000)
+REFUSED  create temp table                                          rc=1  ERROR:  cannot execute CREATE TABLE in a read-only transaction
+         sql: create temp table ro1_t (i int)
+## census as postgres before and after the refusals: fe549373d12a4cb6 fe549373d12a4cb6 unchanged
